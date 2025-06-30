@@ -1,0 +1,13 @@
+# use node js 23.5 for adk-web server
+FROM node:23.5
+
+WORKDIR /app
+
+COPY adk-web /app/
+
+# Install npm dependencies
+RUN npm install
+
+# start the adk-web server
+# npm run serve --backend=http://localhost:8000
+CMD ["npm", "run", "serve", "--backend=http://localhost:8000"]
