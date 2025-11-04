@@ -1,3 +1,4 @@
+node_modules
 ### Angular ###
 ## Angular ##
 # compiled output
@@ -29,4 +30,3 @@ e2e/*.map
 
 # System Files
 .DS_Store
-package-lock.json
