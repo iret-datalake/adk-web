@@ -19,6 +19,7 @@
           "options": {
             "outputPath": "dist/agent_framework_web",
             "index": "src/index.html",
+            "baseHref": "/",
             "browser": "src/main.ts",
             "polyfills": [
               "zone.js"

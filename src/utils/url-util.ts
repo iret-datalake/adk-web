@@ -29,7 +29,8 @@ export class URLUtil {
 
     // Construct base URL using origin property
     // Origin includes protocol, hostname, and port
-    return urlObject.origin + '/dev-ui/';
+    // return urlObject.origin;
+    return urlObject.origin + '/my-app/';
   }
 
   /**

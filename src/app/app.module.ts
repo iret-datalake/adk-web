@@ -25,7 +25,9 @@ import {MatButtonModule} from '@angular/material/button';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatInputModule} from '@angular/material/input';
 import {BrowserAnimationsModule} from '@angular/platform-browser/animations';
+
 import {AppComponent} from './app.component';
+
 import {ComponentModule} from './components/component.module';
 import {AgentService} from './core/services/agent.service';
 import {ArtifactService} from './core/services/artifact.service';
@@ -39,7 +41,9 @@ import {WebSocketService} from './core/services/websocket.service';
 import { TraceService } from './core/services/trace.service';
 
 @NgModule({
-  declarations: [AppComponent],
+  declarations: [
+    AppComponent
+  ],
   imports: [
     ComponentModule,
     BrowserModule,
