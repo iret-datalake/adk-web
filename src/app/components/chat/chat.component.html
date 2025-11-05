@@ -22,7 +22,7 @@
         position: absolute;
         width: 24px;
         height: 24px;
-        color: #c4c7c5;
+        color: #5f6368;
         cursor: pointer;
         margin-left: 20px;
         margin-top: 20px;
@@ -43,7 +43,7 @@
           </div>
           <span
             class="material-symbols-outlined"
-            style="color: #c4c7c5; cursor: pointer; margin-right: 15px"
+            style="color: #5f6368; cursor: pointer; margin-right: 15px"
             matTooltip="Collapse panel"
             (click)="toggleSidePanel()"
             >left_panel_close</span
@@ -191,7 +191,7 @@
             style="
               width: 24px;
               height: 24px;
-              color: #c4c7c5;
+              color: #5f6368;
               cursor: pointer;
               margin-left: 20px;
               margin-top: -2px;
@@ -241,7 +241,7 @@
             <div class="toolbar-session-id">{{ sessionId }}</div>
           </div>
           <div class="toolbar-actions">
-            <div class="toolbar-sse-toggle">
+            <!-- <div class="toolbar-sse-toggle">
               <mat-slide-toggle
                 class="example-margin"
                 [checked]="enableSseIndicator()"
@@ -253,7 +253,7 @@
             <mat-divider
               [vertical]="true"
               style="margin-left: 8px; margin-right: 8px; height: 22px"
-            ></mat-divider>
+            ></mat-divider> -->
             <div style="display: flex; align-items: center">
               <div (click)="onNewSessionClick()" class="toolbar-new-sesison">
                 <mat-icon>add</mat-icon>
@@ -296,7 +296,7 @@
             @if (((apps$ | async) || []).length > 0) {
               <span
                 >Welcome to ADK!<br />
-                Select an agent on the left to begin with.</span
+                This is a test</span
               >
             } @else {
               <div>
@@ -675,9 +675,10 @@
               [(ngModel)]="userInput"
               (keydown.enter)="sendMessage($event)"
               placeholder="Type a Message..."
-              style="caret-color: white"
+              style="caret-color: black"
             ></textarea>
-            <div class="chat-input-actions">
+            <!-- attach file and microphone input buttons here , comment out for now -->
+            <!-- <div class="chat-input-actions">
               <button
                 mat-icon-button
                 (click)="fileInput.click()"
@@ -710,7 +711,7 @@
                   <mat-icon>videocam</mat-icon>
                 </button>
               </div>
-            </div>
+            </div> -->
           </mat-form-field>
         </div>
       }

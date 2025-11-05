@@ -24,7 +24,7 @@
 
 .drawer-container {
   height: 100%;
-  background-color: #131314;
+  background-color: #ffffff;
 }
 
 .generated-image-container {
@@ -48,7 +48,7 @@
 }
 
 .event-container {
-  color: white;
+  color: #333333;
 }
 
 .html-artifact-container {
@@ -67,7 +67,7 @@
   .mat-icon {
     width: 36px;
     height: 36px;
-    color: #bdc1c6;
+    color: #5f6368;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -82,7 +82,7 @@
   flex: 1;
   min-height: 12%;
   box-shadow: none;
-  background-color: #131314;
+  background-color: #ffffff;
 }
 
 .loading-bar {
@@ -109,7 +109,7 @@
 }
 
 .function-event-button {
-  background-color: white;
+  background-color: #f0f0f0;
   margin: 5px 5px 10px;
 }
 
@@ -124,9 +124,9 @@
   justify-content: flex-end;
   align-items: center;
   .message-card {
-    background-color: #004a77;
+    background-color: #dcf8c6;
     align-self: flex-end;
-    color: white;
+    color: #000000;
     box-shadow: none;
   }
 }
@@ -135,29 +135,29 @@
   display: flex;
   align-items: center;
   .message-card {
-    background-color: #303030;
+    background-color: #eeeeee;
     align-self: flex-start;
-    color: white;
+    color: #000000;
     box-shadow: none;
   }
 }
 
 .bot-message:focus-within {
   .message-card {
-    background-color: #131314;
-    border: 1px solid #8ab4f8;
+    background-color: #ffffff;
+    border: 1px solid #007bff;
   }
 }
 
 .message-textarea {
-  background-color: #303030;
+  background-color: #f0f0f0;
   max-width: 100%;
   border: none;
   font-family: 'Google Sans', 'Helvetica Neue', sans-serif;
 }
 
 .message-textarea:focus {
-  background-color: #131314;
+  background-color: #ffffff;
   outline: none;
 }
 
@@ -261,7 +261,7 @@
   flex-grow: 1;
 
   textarea {
-    color: white;
+    color: #000000;
     border: none;
     padding: 10px;
     box-sizing: content-box;
@@ -272,8 +272,8 @@
   }
 
   button {
-    color: white;
-    background-color: rgb(51, 53, 55);
+    color: #000000;
+    background-color: #e0e0e0;
   }
 }
 
@@ -303,8 +303,8 @@
 }
 
 .side-drawer {
-  background-color: #1b1b1b;
-  color: white;
+  background-color: #fafafa;
+  color: #333333;
   border-radius: 0;
 }
 
@@ -361,7 +361,7 @@ button {
 }
 
 .empty-state-container {
-  color: #eee;
+  color: #333333;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -375,17 +375,17 @@ button {
   font-size: 18px;
 
   pre.warning {
-    color: #ffc185;
+    color: #ffa500;
   }
 
   pre.error {
-    color: #ff4545;
+    color: #ff0000;
   }
 }
 
 :host ::ng-deep .mat-mdc-unelevated-button:not(:disabled) {
-  color: #202124;
-  background-color: #8ab4f8;
+  color: #ffffff;
+  background-color: #007bff;
 }
 
 :host ::ng-deep .message-text {
@@ -397,7 +397,7 @@ button {
 }
 
 :host ::ng-deep .mdc-linear-progress__buffer-dots {
-  background: white;
+  background: #cccccc;
 }
 
 :host ::ng-deep .mat-mdc-select-arrow-wrapper {
@@ -405,11 +405,11 @@ button {
 }
 
 :host ::ng-deep .mat-mdc-text-field-wrapper {
-  border: 1px solid #8e918f;
+  border: 1px solid #cccccc;
 }
 
 :host ::ng-deep .input-field .mat-mdc-text-field-wrapper {
-  border: 1px solid #8e918f;
+  border: 1px solid #cccccc;
   border-radius: 16px;
 }
 
@@ -424,13 +424,13 @@ button {
 }
 
 :host ::ng-deep .segment-key {
-  color: lightgray !important;
+  color: #555555 !important;
 }
 
 :host ::ng-deep .mat-mdc-mini-fab {
-  background-color: white;
+  background-color: #f0f0f0;
   mat-icon {
-    color: black;
+    color: #333333;
   }
 }
 
@@ -439,7 +439,7 @@ button {
 }
 
 .resize-handler {
-  background: #5f6368;
+  background: #cccccc;
   width: 4px;
   border-radius: 4px;
   position: absolute;
@@ -452,7 +452,7 @@ button {
 }
 
 .bottom-resize-handler {
-  background: #5f6368;
+  background: #cccccc;
   height: 5px;
   border-radius: 4px;
   position: absolute;
@@ -467,7 +467,7 @@ button {
 
 .trace-detail-container {
   position: relative;
-  background-color: #1b1b1b;
+  background-color: #fafafa;
 
   app-trace-event {
     padding-top: 8px;
@@ -485,7 +485,7 @@ button {
 .app-select-container {
   width: 30%;
   margin-top: 12px;
-  background-color: #212123;
+  background-color: #f0f0f0;
   margin-left: 20px;
   height: 30px;
   display: flex;
@@ -499,9 +499,9 @@ button {
 .app-select-container {
   @include mat.select-overrides(
     (
-      placeholder-text-color: #8ab4f8,
-      enabled-trigger-text-color: #8ab4f8,
-      enabled-arrow-color: #8ab4f8,
+      placeholder-text-color: #007bff,
+      enabled-trigger-text-color: #007bff,
+      enabled-arrow-color: #007bff,
     )
   );
 }
@@ -529,7 +529,7 @@ button {
   left: 0;
   right: 0;
   bottom: 0;
-  background: #242424;
+  background: #f5f5f5;
   display: inline-block;
   justify-content: center;
   align-items: center;
@@ -537,7 +537,7 @@ button {
 }
 
 .details-content {
-  color: white;
+  color: #333333;
   font-size: 14px;
 }
 
@@ -555,8 +555,8 @@ button {
   justify-content: space-between;
   @include mat.button-overrides(
     (
-      filled-container-color: #89b4f8,
-      filled-label-text-color: black,
+      filled-container-color: #007bff,
+      filled-label-text-color: white,
     )
   );
 }
@@ -565,10 +565,11 @@ button {
   position: sticky;
   top: 0;
   height: 48px;
-  background: #1b1b1b;
+  background: #ffffff;
   display: flex;
   align-items: center;
   z-index: 10;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .chat-toolbar.edit-mode {
@@ -587,7 +588,7 @@ button {
 }
 
 .toolbar-session-text {
-  color: #fdfdfd;
+  color: #333333;
   font-family: Roboto;
   font-size: 12px;
   font-style: normal;
@@ -600,7 +601,7 @@ button {
 }
 
 .toolbar-session-id {
-  color: #9aa0a6;
+  color: #5f6368;
   font-family: 'Google Sans Mono', monospace;
   font-size: 14px;
   font-style: normal;
@@ -613,7 +614,7 @@ button {
 .toolbar-icon {
   width: 24px;
   height: 24px;
-  color: #c4c7c5;
+  color: #5f6368;
   cursor: pointer;
   margin-right: 16px;
 }
@@ -621,7 +622,7 @@ button {
 .toolbar-new-sesison {
   font-size: 14px;
   margin-right: 16px;
-  color: #9aa0a6;
+  color: #5f6368;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -631,7 +632,7 @@ button {
   @include mat.slide-toggle-overrides(
     (
       label-text-size: 14px,
-      label-text-color: #9aa0a6,
+      label-text-color: #5f6368,
       selected-track-color: #8ab4f9,
       selected-focus-track-color: #8ab4f9,
       selected-hover-track-color: #8ab4f9,
@@ -666,12 +667,12 @@ button {
   position: absolute;
   top: 1px;
   right: 1px;
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgba(255, 255, 255, 0.7);
   border: none;
   border-radius: 50%;
   padding: 8px;
   cursor: pointer;
-  color: white;
+  color: #333333;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -689,7 +690,7 @@ button {
   flex-direction: column;
   gap: 8px;
   height: 80px;
-  background-color: #1e1e1e;
+  background-color: #f5f5f5;
   border-radius: 12px;
 }
 
@@ -701,7 +702,8 @@ button {
 
 .thought-chip {
   border-radius: 5px;
-  background-color: #8ab4f8;
+  background-color: #007bff;
+  color: white;
   width: 80px;
   text-align: center;
   margin-top: 5px;
@@ -768,12 +770,12 @@ button {
 }
 
 ::ng-deep .mat-drawer {
-  border-right: 1px solid #444746 !important;
+  border-right: 1px solid #e0e0e0 !important;
 }
 
 .app-name-option,
 .app-select {
-  color: #9aa0a6;
+  color: #5f6368;
   font-family: 'Google Sans Mono', monospace;
   font-style: normal;
   font-weight: 400;
