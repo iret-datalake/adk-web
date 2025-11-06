@@ -32,6 +32,7 @@ import stc from 'string-to-color';
 import {URLUtil} from '../../../utils/url-util';
 import {AgentRunRequest} from '../../core/models/AgentRunRequest';
 import {Session} from '../../core/models/Session';
+import {User} from '../../core/models/User';
 import {AgentService} from '../../core/services/agent.service';
 import {ArtifactService} from '../../core/services/artifact.service';
 import {AudioService} from '../../core/services/audio.service';
@@ -40,6 +41,7 @@ import {EvalService} from '../../core/services/eval.service';
 import {EventService} from '../../core/services/event.service';
 import {FeatureFlagService} from '../../core/services/feature-flag.service';
 import {SessionService} from '../../core/services/session.service';
+import {UserService} from '../../core/services/user.service';
 import {TraceService} from '../../core/services/trace.service';
 import {VideoService} from '../../core/services/video.service';
 import {WebSocketService} from '../../core/services/websocket.service';
@@ -120,7 +122,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   artifacts: any[] = [];
   userInput: string = '';
   userEditEvalCaseMessage: string = '';
-  userId = 'user';
+  userId = '';
+  currentUser: User | null = null;
   appName = '';
   sessionId = ``;
   evalCase: EvalCase | null = null;
@@ -134,6 +137,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   showSidePanel = true;
   useSse = false;
   currentSessionState = {};
+  private hasInitializedAfterUserLoad = false;
   private readonly messagesSubject = new BehaviorSubject<any[]>([]);
   private readonly streamingTextMessageSubject =
     new BehaviorSubject<any | null>(null);
@@ -173,6 +177,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   });
 
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
+  private readonly userService = inject(UserService);
 
   // Load apps
   private readonly agentService = inject(AgentService);
@@ -241,6 +246,21 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.userService.currentUser$
+      .pipe(filter((user): user is User => !!user && !!user.id))
+      .subscribe((user) => {
+        this.currentUser = user;
+        this.userId = user.id;
+        if (!this.hasInitializedAfterUserLoad) {
+          this.hasInitializedAfterUserLoad = true;
+          this.initializeAfterUserResolved();
+        }
+      });
+
+    this.userService.loadCurrentUser().pipe(take(1)).subscribe();
+  }
+
+  private initializeAfterUserResolved(): void {
     this.syncSelectedAppFromUrl();
     this.updateSelectedAppUrl();
 
@@ -250,7 +270,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       this.openSnackBar(error, 'OK');
     });
 
-    // OAuth HACK: Opens oauth poup in a new window. If the oauth callback
+    // OAuth HACK: Opens oauth popup in a new window. If the oauth callback
     // is successful, the new window acquires the auth token, state and
     // optionally the scope. Send this back to the main window.
     const location = new URL(window.location.href);

@@ -294,10 +294,14 @@
         } @else {
           <div class="empty-state-container">
             @if (((apps$ | async) || []).length > 0) {
-              <span
-                >Welcome to ADK!<br />
-                This is a test</span
-              >
+              <span>
+                Welcome to ADK
+                @if (currentUser) {
+                  , {{ currentUser.displayName || currentUser.id }}
+                }
+                !<br />
+                Select an agent on the left to begin.
+              </span>
             } @else {
               <div>
                 Failed to load agents. To get started, run
