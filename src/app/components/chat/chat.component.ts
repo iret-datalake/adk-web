@@ -139,6 +139,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     new BehaviorSubject<any | null>(null);
   private readonly scrollInterruptedSubject = new BehaviorSubject(true);
   private readonly isModelThinkingSubject = new BehaviorSubject(false);
+  private readonly hostElementRef = inject(ElementRef<HTMLElement>);
 
   // TODO: Remove this once backend supports restarting bidi streaming.
   sessionHasUsedBidi = new Set<string>();
@@ -292,6 +293,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           this.scrollToBottom();
         }, 100);
       }
+      setTimeout(() => {
+        this.ensureMarkdownLinksTargetBlank();
+      }, 0);
     });
 
     this.traceService.selectedTraceRow$.subscribe(node => {
@@ -317,6 +321,27 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         top: this.scrollContainer.nativeElement.scrollHeight,
         behavior: 'smooth',
       });
+    });
+  }
+
+  private ensureMarkdownLinksTargetBlank(): void {
+    const hostElement = this.hostElementRef.nativeElement;
+    if (!hostElement) {
+      return;
+    }
+
+    const anchorElements = hostElement.querySelectorAll('.message-card a[href]');
+  anchorElements.forEach((anchorElement: Element) => {
+      const anchor = anchorElement as HTMLAnchorElement;
+      if (anchor.target !== '_blank') {
+        this.renderer.setAttribute(anchor, 'target', '_blank');
+      }
+
+      const existingRel = anchor.getAttribute('rel') ?? '';
+      const relTokens = new Set(existingRel.split(' ').filter(Boolean));
+      relTokens.add('noopener');
+      relTokens.add('noreferrer');
+      this.renderer.setAttribute(anchor, 'rel', Array.from(relTokens).join(' '));
     });
   }
 
