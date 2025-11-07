@@ -26,7 +26,6 @@ import {User} from '../models/User';
   providedIn: 'root',
 })
 export class UserService {
-  private readonly apiServerDomain = URLUtil.getApiServerBaseUrl();
   private readonly currentUserSubject = new BehaviorSubject<User | null>(null);
   readonly currentUser$ = this.currentUserSubject.asObservable();
 
@@ -35,12 +34,9 @@ export class UserService {
   loadCurrentUser(): Observable<User> {
     const fallbackUser: User = {id: 'user'};
 
-    if (!this.apiServerDomain) {
-      this.currentUserSubject.next(fallbackUser);
-      return of(fallbackUser);
-    }
+    const baseUrl = URLUtil.getApiServerBaseUrl();
+    const url = baseUrl ? `${baseUrl}/users/me` : '/users/me';
 
-    const url = `${this.apiServerDomain}/users/me`;
     return this.http.get<User>(url).pipe(
         map((user) => user && user.id ? user : fallbackUser),
         catchError(() => of(fallbackUser)),
