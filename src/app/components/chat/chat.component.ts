@@ -26,7 +26,7 @@ import {MatSnackBar} from '@angular/material/snack-bar';
 import {DomSanitizer, SafeHtml} from '@angular/platform-browser';
 import {ActivatedRoute, NavigationEnd, Router} from '@angular/router';
 import {instance} from '@viz-js/viz';
-import {BehaviorSubject, catchError, combineLatest, distinctUntilChanged, filter, map, Observable, of, shareReplay, switchMap, take, tap} from 'rxjs';
+import {BehaviorSubject, catchError, combineLatest, distinctUntilChanged, finalize, filter, map, Observable, of, shareReplay, switchMap, take, tap} from 'rxjs';
 import stc from 'string-to-color';
 
 import {URLUtil} from '../../../utils/url-util';
@@ -122,6 +122,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   artifacts: any[] = [];
   userInput: string = '';
   userEditEvalCaseMessage: string = '';
+  protected isLoadingUser = signal(true);
+  protected userLoadingError = signal('');
   userId = '';
   currentUser: User | null = null;
   appName = '';
@@ -246,6 +248,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.userService.userLoadError$.subscribe((error) => {
+      this.userLoadingError.set(error);
+    });
+
     this.userService.currentUser$
       .pipe(filter((user): user is User => !!user && !!user.id))
       .subscribe((user) => {
@@ -257,7 +263,14 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       });
 
-    this.userService.loadCurrentUser().pipe(take(1)).subscribe();
+    this.isLoadingUser.set(true);
+    this.userService
+      .loadCurrentUser()
+      .pipe(
+        take(1),
+        finalize(() => this.isLoadingUser.set(false)),
+      )
+      .subscribe();
   }
 
   private initializeAfterUserResolved(): void {

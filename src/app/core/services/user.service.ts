@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import {HttpClient} from '@angular/common/http';
+import {HttpClient, HttpErrorResponse} from '@angular/common/http';
 import {Injectable} from '@angular/core';
 import {BehaviorSubject, Observable, catchError, map, of, tap} from 'rxjs';
 
@@ -28,6 +28,8 @@ import {User} from '../models/User';
 export class UserService {
   private readonly currentUserSubject = new BehaviorSubject<User | null>(null);
   readonly currentUser$ = this.currentUserSubject.asObservable();
+  private readonly userLoadErrorSubject = new BehaviorSubject<string>('');
+  readonly userLoadError$ = this.userLoadErrorSubject.asObservable();
 
   constructor(private http: HttpClient) {}
 
@@ -36,10 +38,15 @@ export class UserService {
 
     const baseUrl = URLUtil.getApiServerBaseUrl();
     const url = baseUrl ? `${baseUrl}/users/me` : '/users/me';
+    this.userLoadErrorSubject.next('');
 
     return this.http.get<User>(url).pipe(
         map((user) => user && user.id ? user : fallbackUser),
-        catchError(() => of(fallbackUser)),
+        catchError((error: HttpErrorResponse) => {
+          const errorMessage = error?.message ?? 'Failed to load user information.';
+          this.userLoadErrorSubject.next(errorMessage);
+          return of(fallbackUser);
+        }),
         tap((user) => this.currentUserSubject.next(user)),
     );
   }
