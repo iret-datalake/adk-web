@@ -1117,7 +1117,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   protected handleReturnToSession(event: boolean) {
     this.sessionTab.getSession(this.sessionId);
-    this.evalTab.resetEvalCase();
+  this.evalTab?.resetEvalCase();
     this.isChatMode.set(true);
   }
 
@@ -1347,7 +1347,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe((result) => {
       if (result) {
-        this.evalTab.deleteEvalCase(this.evalCase!.evalId);
+  this.evalTab?.deleteEvalCase(this.evalCase!.evalId);
         this.openSnackBar('Eval case deleted', 'OK')
       }
     });
@@ -1367,8 +1367,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.bottomPanelVisible = false;
 
     // Close eval history if opened
-    if (!!this.evalTab.showEvalHistory) {
-      this.evalTab.toggleEvalHistoryButton();
+    if (!!this.evalTab?.showEvalHistory) {
+      this.evalTab?.toggleEvalHistoryButton();
     }
   }
 
