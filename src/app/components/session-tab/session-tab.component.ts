@@ -55,7 +55,10 @@ export class SessionTabComponent implements OnInit {
               (a: any, b: any) =>
                   Number(b.lastUpdateTime) - Number(a.lastUpdateTime),
           );
-          this.sessionList = res;
+          this.sessionList = res.map((session: any) => ({
+            ...session,
+            sessionBrief: this.extractBriefFromState(session),
+          }));
         });
   }
 
@@ -92,11 +95,48 @@ export class SessionTabComponent implements OnInit {
     };
   }
 
+  private extractBriefFromState(session: any): string | undefined {
+    const state = session?.state;
+    if (!state || typeof state !== 'object') {
+      return undefined;
+    }
+    return state['session_brief'] ?? state['breif'] ?? undefined;
+  }
+
+
   reloadSession(sessionId: string) {
     this.sessionService
       .getSession(this.userId, this.appName, sessionId)
       .subscribe((res) => {
         const session = this.fromApiResultToSession(res);
+        const sessionBrief = this.extractBriefFromState(res);
+        let found = false;
+        const updatedSessions = this.sessionList.map((existing) => {
+          if (existing.id !== sessionId) {
+            return existing;
+          }
+          found = true;
+          return {
+            ...existing,
+            ...res,
+            sessionBrief,
+          };
+        });
+
+        this.sessionList = found
+          ? updatedSessions
+          : [
+              ...updatedSessions,
+              {
+                ...res,
+                sessionBrief,
+              },
+            ];
+
+        this.sessionList.sort(
+            (a: any, b: any) =>
+              Number(b.lastUpdateTime) - Number(a.lastUpdateTime),
+        );
         this.sessionReloaded.emit(session);
       });
   }

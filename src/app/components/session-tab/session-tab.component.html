@@ -19,6 +19,11 @@
     @for (session of sessionList; track session) {
       <div (click)="getSession(session.id)" [ngClass]="session.id === sessionId ? 'session-item current': 'session-item'">
         <div class="session-info">
+          @if (session.sessionBrief) {
+            <div class="session-brief" title="{{ session.sessionBrief }}">
+              {{ session.sessionBrief }}
+            </div>
+          }
           <div class="session-id">
             {{session.id}}
           </div>
