@@ -196,6 +196,16 @@
                 delete
               </span>
             }
+            @if (userInitial) {
+              <div
+                class="toolbar-user-avatar"
+                [style.background-color]="userAvatarColor"
+                [style.color]="userAvatarTextColor"
+                [matTooltip]="currentUser?.displayName || currentUser?.email || currentUser?.id"
+              >
+                {{ userInitial }}
+              </div>
+            }
           </div>
         } @else {
           <div style="display: flex">
@@ -241,6 +251,16 @@
                   (click)="importSession()" >
                   upload
                 </span>
+              }
+              @if (userInitial) {
+                <div
+                  class="toolbar-user-avatar"
+                  [style.background-color]="userAvatarColor"
+                  [style.color]="userAvatarTextColor"
+                  [matTooltip]="currentUser?.displayName || currentUser?.email || currentUser?.id"
+                >
+                  {{ userInitial }}
+                </div>
               }
             </div>
           </div>

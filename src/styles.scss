@@ -70,3 +70,16 @@ markdown {
     size: 80
   ));
 }
+
+.light-dialog {
+  .mat-mdc-dialog-surface {
+    background-color: #ffffff !important;
+    color: #202124;
+  }
+
+  .mat-mdc-dialog-title,
+  .mat-mdc-dialog-content,
+  .mat-mdc-dialog-actions {
+    color: inherit;
+  }
+}

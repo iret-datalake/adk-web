@@ -26,21 +26,21 @@
   display: flex;
   justify-content: space-between;
   border: none;
-  background-color: #303030;
+  background-color: #e0e3e7;
   border-radius: 8px;
   margin-bottom: 4px;
   cursor: pointer;
 
   &:hover {
-    background-color: #141414;
+    background-color: #d2d6db;
   }
   &.current {
-    background-color: #004a77;
+    background-color: #b0b6c2;
   }
 }
 
 .session-id {
-  color: #e8eaed;
+  color: #202124;
   font-family: 'Google Sans Mono', monospace;
   font-size: 14px;
   font-style: normal;
@@ -50,7 +50,7 @@
 }
 
 .session-date {
-  color: #9aa0a6;
+  color: #3c4043;
   font-family: Roboto;
   font-size: 12px;
   font-style: normal;

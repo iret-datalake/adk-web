@@ -126,6 +126,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   protected userLoadingError = signal('');
   userId = '';
   currentUser: User | null = null;
+  protected userInitial = '';
+  protected userAvatarColor = '#5f6368';
+  protected userAvatarTextColor = '#ffffff';
   appName = '';
   sessionId = ``;
   evalCase: EvalCase | null = null;
@@ -257,6 +260,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       .subscribe((user) => {
         this.currentUser = user;
         this.userId = user.id;
+        this.computeUserAvatar(user);
         if (!this.hasInitializedAfterUserLoad) {
           this.hasInitializedAfterUserLoad = true;
           this.initializeAfterUserResolved();
@@ -355,6 +359,36 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         behavior: 'smooth',
       });
     });
+  }
+
+  private computeUserAvatar(user: User): void {
+    const source = this.getUserAvatarSource(user);
+    const initial = source ? source[0].toUpperCase() : '?';
+    const background = stc(source || 'user');
+    this.userInitial = initial;
+    this.userAvatarColor = background;
+    this.userAvatarTextColor = this.getContrastingTextColor(background);
+  }
+
+  private getUserAvatarSource(user: User): string {
+    const trimmedDisplay = user.displayName?.trim();
+    const trimmedEmail = user.email?.trim();
+    const trimmedId = user.id?.trim();
+    return trimmedDisplay || trimmedEmail || trimmedId || 'user';
+  }
+
+  private getContrastingTextColor(colorHex: string): string {
+    const hex = colorHex.startsWith('#') ? colorHex.slice(1) : colorHex;
+    if (hex.length !== 6 || Number.isNaN(Number.parseInt(hex, 16))) {
+      return '#ffffff';
+    }
+
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6 ? '#202124' : '#ffffff';
   }
 
   private ensureMarkdownLinksTargetBlank(): void {
@@ -1343,6 +1377,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     const dialogRef = this.dialog.open(DeleteSessionDialogComponent, {
       width: '600px',
       data: dialogData,
+      panelClass: 'light-dialog',
     });
 
     dialogRef.afterClosed().subscribe((result) => {
@@ -1435,6 +1470,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     const dialogRef = this.dialog.open(DeleteSessionDialogComponent, {
       width: '600px',
       data: dialogData,
+      panelClass: 'light-dialog',
     });
 
     dialogRef.afterClosed().subscribe((result) => {
