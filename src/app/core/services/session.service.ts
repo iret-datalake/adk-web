@@ -61,6 +61,13 @@ export class SessionService {
     return this.http.get<any>(url);
   }
 
+  getSessionBrief(userId: string, appName: string, sessionId: string) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/sessions/${sessionId}/brief`;
+
+    return this.http.get<{sessionId: string; brief: string}>(url);
+  }
+
   importSession(userId: string, appName: string, events: any[]) {
     if (this.apiServerDomain != undefined) {
       const url = this.apiServerDomain +
