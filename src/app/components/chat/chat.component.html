@@ -88,9 +88,7 @@
             <ng-template mat-tab-label>
               <span class="tab-label">Contents</span>
             </ng-template>
-            <div class="tab-placeholder">
-              <p>Contents tab placeholder.</p>
-            </div>
+            <app-state-tab [sessionState]="currentSessionState"></app-state-tab>
           </mat-tab>
         </mat-tab-group>
       </div>

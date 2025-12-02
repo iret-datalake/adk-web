@@ -15,6 +15,7 @@
  */
 
 import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {NO_ERRORS_SCHEMA, SimpleChange} from '@angular/core';
 
 import {StateTabComponent} from './state-tab.component';
 
@@ -25,6 +26,7 @@ describe('StateTabComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [StateTabComponent],
+      schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
 
     fixture = TestBed.createComponent(StateTabComponent);
@@ -34,5 +36,23 @@ describe('StateTabComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should expose Asana state when available', () => {
+    const asanaState = {
+      tasks: [
+        {gid: '123', name: 'Prepare quarterly report'},
+        {gid: '456', name: 'Create hiring plan'},
+      ],
+    };
+
+    component.sessionState = {asana: asanaState};
+
+    component.ngOnChanges({
+      sessionState: new SimpleChange(null, component.sessionState, true),
+    });
+
+    expect((component as any).hasStateContent).toBeTrue();
+    expect((component as any).currentAsanaState).toEqual(asanaState);
   });
 });

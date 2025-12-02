@@ -16,7 +16,6 @@
  */
 
 import {Component, EventEmitter, Input, OnInit, Output} from '@angular/core';
-import {MatDialog} from '@angular/material/dialog';
 import {Subject, switchMap} from 'rxjs';
 import {Session} from '../../core/models/Session';
 import {SessionService} from '../../core/services/session.service';
@@ -41,7 +40,6 @@ export class SessionTabComponent implements OnInit {
 
   constructor(
     private sessionService: SessionService,
-    private dialog: MatDialog,
   ) {
     this.refreshSessionsSubject
         .pipe(
@@ -51,14 +49,12 @@ export class SessionTabComponent implements OnInit {
                 ),
             )
         .subscribe((res) => {
-          res = res.sort(
+          this.sessionList = res
+            .map((session: any) => this.decorateSession(session))
+            .sort(
               (a: any, b: any) =>
-                  Number(b.lastUpdateTime) - Number(a.lastUpdateTime),
-          );
-          this.sessionList = res.map((session: any) => ({
-            ...session,
-            sessionBrief: this.extractBriefFromState(session),
-          }));
+                Number(b.lastUpdateTime) - Number(a.lastUpdateTime),
+            );
         });
   }
 
@@ -85,6 +81,24 @@ export class SessionTabComponent implements OnInit {
     return date.toLocaleString();
   }
 
+  protected getBrief(session: any): string | null {
+    if (!session) {
+      return null;
+    }
+
+    const briefCandidate =
+        this.extractBriefFromState(session) ??
+        session.sessionBrief ??
+        session.brief ??
+        session.summary;
+    if (typeof briefCandidate !== 'string') {
+      return null;
+    }
+
+    const trimmed = briefCandidate.trim();
+    return trimmed ? trimmed : null;
+  }
+
   private fromApiResultToSession(res: any): Session {
     return {
       id: res?.id ?? '',
@@ -95,21 +109,11 @@ export class SessionTabComponent implements OnInit {
     };
   }
 
-  private extractBriefFromState(session: any): string | undefined {
-    const state = session?.state;
-    if (!state || typeof state !== 'object') {
-      return undefined;
-    }
-    return state['session_brief'] ?? state['breif'] ?? undefined;
-  }
-
-
   reloadSession(sessionId: string) {
     this.sessionService
       .getSession(this.userId, this.appName, sessionId)
       .subscribe((res) => {
         const session = this.fromApiResultToSession(res);
-        const sessionBrief = this.extractBriefFromState(res);
         let found = false;
         const updatedSessions = this.sessionList.map((existing) => {
           if (existing.id !== sessionId) {
@@ -118,8 +122,7 @@ export class SessionTabComponent implements OnInit {
           found = true;
           return {
             ...existing,
-            ...res,
-            sessionBrief,
+            ...this.decorateSession(res),
           };
         });
 
@@ -127,10 +130,7 @@ export class SessionTabComponent implements OnInit {
           ? updatedSessions
           : [
               ...updatedSessions,
-              {
-                ...res,
-                sessionBrief,
-              },
+              this.decorateSession(res),
             ];
 
         this.sessionList.sort(
@@ -152,5 +152,29 @@ export class SessionTabComponent implements OnInit {
       }
       return this.sessionList[index + 1];
     }
+  }
+
+  private decorateSession(session: any): any {
+    if (!session || typeof session !== 'object') {
+      return session;
+    }
+    const brief = this.extractBriefFromState(session);
+    return {
+      ...session,
+      sessionBrief: brief ?? session.sessionBrief ?? session.brief ?? session.summary ?? null,
+    };
+  }
+
+  private extractBriefFromState(session: any): string | null {
+    const state = session?.state;
+    if (!state || typeof state !== 'object') {
+      return null;
+    }
+    const brief = state['session_brief'] ?? state['breif'];
+    if (typeof brief !== 'string') {
+      return null;
+    }
+    const trimmed = brief.trim();
+    return trimmed ? trimmed : null;
   }
 }

@@ -40,13 +40,21 @@
 }
 
 .session-id {
-  color: #202124;
+  color: #5f6368;
   font-family: 'Google Sans Mono', monospace;
   font-size: 14px;
   font-style: normal;
   font-weight: 500;
   line-height: 20px;
   letter-spacing: 0.25px;
+}
+
+.session-brief {
+  color: #202124;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  margin-bottom: 2px;
 }
 
 .session-date {
@@ -61,21 +69,4 @@
 
 .session-info {
   padding: 11px;
-}
-
-.session-brief {
-  color: #202124;
-  font-family: 'Google Sans', sans-serif;
-  font-size: 13px;
-  font-style: normal;
-  font-weight: 600;
-  line-height: 18px;
-  letter-spacing: 0.1px;
-  margin-bottom: 4px;
-  display: -webkit-box;
-  line-clamp: 2;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }

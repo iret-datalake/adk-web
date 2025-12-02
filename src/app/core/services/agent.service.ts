@@ -47,9 +47,17 @@ export class AgentService {
     return this.isLoading;
   }
 
-  runSse(req: AgentRunRequest) {
+  runSse(
+    req: AgentRunRequest,
+    options?: {
+      suppressLoading?: boolean,
+    },
+  ) {
     const url = this.apiServerDomain + `/run_sse`;
-    this.isLoading.next(true);
+    const suppressLoading = options?.suppressLoading ?? false;
+    if (!suppressLoading) {
+      this.isLoading.next(true);
+    }
     return new Observable<string>((observer) => {
       const self = this;
       fetch(url, {
@@ -68,9 +76,13 @@ export class AgentService {
           const read = () => {
             reader?.read()
                 .then(({done, value}) => {
-                  this.isLoading.next(true);
+                  if (!suppressLoading) {
+                    this.isLoading.next(true);
+                  }
                   if (done) {
-                    this.isLoading.next(false);
+                    if (!suppressLoading) {
+                      this.isLoading.next(false);
+                    }
                     return observer.complete();
                   }
                   const chunk = decoder.decode(value, {stream: true});
@@ -94,6 +106,9 @@ export class AgentService {
                   read();  // Read the next chunk
                 })
                 .catch((err) => {
+                  if (!suppressLoading) {
+                    this.isLoading.next(false);
+                  }
                   self.zone.run(() => observer.error(err));
                 });
           };
@@ -101,6 +116,9 @@ export class AgentService {
           read();
         })
         .catch((err) => {
+          if (!suppressLoading) {
+            this.isLoading.next(false);
+          }
           self.zone.run(() => observer.error(err));
         });
     });

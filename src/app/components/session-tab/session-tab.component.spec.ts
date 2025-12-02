@@ -35,4 +35,10 @@ describe('SessionTabComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('should return a trimmed brief when available', () => {
+    const session = {brief: '  Sample summary  '};
+    const result = (component as any).getBrief(session);
+    expect(result).toBe('Sample summary');
+  });
 });

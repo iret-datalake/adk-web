@@ -15,7 +15,123 @@
 -->
 
 <div class="state-wrapper">
-    <div>
-        <ngx-json-viewer [json]="sessionState"></ngx-json-viewer>
+    <div class="state-header">
+        <div class="state-title-group">
+            <div class="state-title">Session contents</div>
+            <div class="state-subtitle">
+                <span *ngIf="availablePlatforms.length; else emptyStateText">
+                    {{ availablePlatforms.length }} platform(s) detected
+                </span>
+                <ng-template #emptyStateText>
+                    No platform data available
+                </ng-template>
+            </div>
+        </div>
     </div>
+
+    @if (availablePlatforms.length === 0) {
+        <div class="state-empty">
+            <p>No session state is currently available.</p>
+        </div>
+    } @else {
+        <mat-accordion class="platform-accordion">
+            @for (platform of availablePlatforms; track platform) {
+            <mat-expansion-panel [ngClass]="['platform-panel-wrapper', 'platform-panel-wrapper-' + platform]" [expanded]="isPanelExpanded(platform)" (opened)="onPanelOpened(platform)">
+                    <mat-expansion-panel-header [ngStyle]="{'background-color': getPlatformAccent(platform)}" [ngClass]="getPlatformPanelClass(platform)">
+                        <div class="platform-header">
+                            <div class="platform-title">{{ platform | titlecase }}</div>
+                        </div>
+                    </mat-expansion-panel-header>
+
+                    <div class="platform-panel-body">
+                        @if (platform === 'asana') {
+                            @if (hasAsanaTasks()) {
+                                <div class="asana-task-list">
+                                    @for (task of asanaTasks; track task) {
+                                        <article class="asana-task-card" [ngClass]="task.statusCategory">
+                                            <header class="task-card-header">
+                                                <div class="task-header-text">
+                                                    <div class="task-title">{{ task.name }}</div>
+                                                    <div class="task-id">#{{ task.gid }}</div>
+                                                </div>
+                                                <span [ngClass]="getStatusPillClass(task)">
+                                                    {{ task.statusLabel ?? (task.completed ? 'Completed' : task.overdue ? 'Overdue' : 'Active') }}
+                                                </span>
+                                            </header>
+
+                                            <div class="task-card-body">
+                                                <div class="task-meta-row" *ngIf="task.assigneeName || task.dueOn">
+                                                    <div class="task-meta" *ngIf="task.assigneeName">
+                                                        <span class="meta-label">Assignee</span>
+                                                        <span class="meta-value">{{ task.assigneeName }}</span>
+                                                    </div>
+                                                    <div class="task-meta" *ngIf="task.dueOn">
+                                                        <span class="meta-label">Due</span>
+                                                        <span class="meta-value" [ngClass]="{'overdue': task.overdue}">
+                                                            {{ task.dueOn | date:'MMM d, y' }}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-meta-row" *ngIf="task.priority">
+                                                    <div class="task-meta">
+                                                        <span class="meta-label">Priority</span>
+                                                        <span class="meta-chip">{{ task.priority }}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-meta-row" *ngIf="task.projectNames.length">
+                                                    <div class="task-meta">
+                                                        <span class="meta-label">Projects</span>
+                                                        <div class="meta-pills">
+                                                            @for (project of task.projectNames; track project) {
+                                                                <span class="meta-chip">{{ project }}</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-meta-row" *ngIf="task.tagNames.length">
+                                                    <div class="task-meta">
+                                                        <span class="meta-label">Tags</span>
+                                                        <div class="meta-pills">
+                                                            @for (tag of task.tagNames; track tag) {
+                                                                <span class="meta-chip ghost">{{ tag }}</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-description" *ngIf="task.description">
+                                                    {{ task.description }}
+                                                </div>
+                                            </div>
+
+                                            <footer class="task-card-footer">
+                                                <a *ngIf="task.permalinkUrl" [href]="task.permalinkUrl" target="_blank" rel="noopener noreferrer">
+                                                    Open in Asana
+                                                    <span class="material-symbols-outlined">open_in_new</span>
+                                                </a>
+                                                <span class="task-updated" *ngIf="task.lastUpdated">
+                                                    Updated {{ task.lastUpdated | date:'MMM d, y, h:mm a' }}
+                                                </span>
+                                            </footer>
+                                        </article>
+                                    }
+                                </div>
+                            } @else {
+                                <div class="state-empty">
+                                    <p>No Asana tasks are currently available.</p>
+                                </div>
+                            }
+                        } @else {
+                            <div class="state-placeholder">
+                                <p>{{ platform | titlecase }} data does not have a custom viewer yet.</p>
+                            </div>
+                        }
+                    </div>
+                </mat-expansion-panel>
+            }
+        </mat-accordion>
+    }
 </div>

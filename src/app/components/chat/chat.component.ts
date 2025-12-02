@@ -26,7 +26,7 @@ import {MatSnackBar} from '@angular/material/snack-bar';
 import {DomSanitizer, SafeHtml} from '@angular/platform-browser';
 import {ActivatedRoute, NavigationEnd, Router} from '@angular/router';
 import {instance} from '@viz-js/viz';
-import {BehaviorSubject, Subscription, catchError, combineLatest, distinctUntilChanged, finalize, filter, map, Observable, of, shareReplay, switchMap, take, tap} from 'rxjs';
+import {BehaviorSubject, catchError, combineLatest, distinctUntilChanged, finalize, filter, map, Observable, of, shareReplay, switchMap, take, tap} from 'rxjs';
 import stc from 'string-to-color';
 
 import {URLUtil} from '../../../utils/url-util';
@@ -170,9 +170,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   selectedFiles: { file: File; url: string }[] = [];
   private previousMessageCount = 0;
-  private pendingSessionBriefRefresh = false;
-  private sessionBriefRefreshRequested = false;
-  private sessionBriefRefreshSub: Subscription | null = null;
 
   protected openBase64InNewTab = openBase64InNewTab;
   protected MediaType = MediaType;
@@ -522,7 +519,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedFiles = [];
     let index = this.eventMessageIndexArray.length - 1;
     this.streamingTextMessage = null;
-    this.sessionBriefRefreshRequested = false;
     this.agentService.runSse(req).subscribe({
       next: async (chunk) => {
         if (chunk.startsWith('{"error"')) {
@@ -535,7 +531,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           return;
         }
         if (chunkJson.sessionBriefRefreshRequired) {
-          this.handleSessionBriefRefreshRequired();
+          this.requestSessionBriefRefresh();
           return;
         }
         if (chunkJson.content) {
@@ -550,12 +546,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       error: (err) => console.error('SSE error:', err),
       complete: () => {
         this.streamingTextMessage = null;
-        if (this.sessionBriefRefreshRequested && !this.pendingSessionBriefRefresh) {
-          this.requestSessionBriefRefresh();
-        }
-        if (!this.pendingSessionBriefRefresh) {
-          this.sessionTab.reloadSession(this.sessionId);
-        }
+        this.requestSessionBriefRefresh();
         this.eventService.getTrace(this.sessionId)
             .pipe(catchError((error) => {
               if (error.status === 404) {
@@ -575,37 +566,22 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.changeDetectorRef.detectChanges();
   }
 
-  private handleSessionBriefRefreshRequired(): void {
-    this.sessionBriefRefreshRequested = true;
-    this.requestSessionBriefRefresh();
-  }
-
-  private requestSessionBriefRefresh(): void {
-    if (!this.sessionId || !this.userId || !this.appName) {
-      this.sessionBriefRefreshRequested = false;
+  private requestSessionBriefRefresh() {
+    if (!this.sessionId) {
       return;
     }
-    if (this.pendingSessionBriefRefresh) {
-      return;
-    }
-    this.pendingSessionBriefRefresh = true;
-    this.sessionBriefRefreshSub?.unsubscribe();
-    this.sessionBriefRefreshSub = this.sessionService
+    this.sessionService
       .getSessionBrief(this.userId, this.appName, this.sessionId)
       .pipe(
-        tap(() => {
-          this.sessionTab.reloadSession(this.sessionId);
-        }),
         finalize(() => {
-          this.pendingSessionBriefRefresh = false;
-          this.sessionBriefRefreshSub = null;
-          this.sessionBriefRefreshRequested = false;
+          this.sessionTab.reloadSession(this.sessionId);
         }),
       )
       .subscribe({
+        next: () => {
+        },
         error: (error) => {
           console.error('Failed to refresh session brief', error);
-          this.sessionTab.reloadSession(this.sessionId);
         },
       });
   }
@@ -951,7 +927,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     let response: any[] = [];
-    this.agentService.runSse(authResponse).subscribe({
+    this.agentService.runSse(authResponse, { suppressLoading: true }).subscribe({
       next: async (chunk) => {
         const chunkJson = JSON.parse(chunk);
         response.push(chunkJson);
@@ -967,10 +943,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     let index = this.eventMessageIndexArray.length - 1;
     for (const e of response) {
       if (e.sessionBriefRefreshRequired) {
-        this.handleSessionBriefRefreshRequired();
-        continue;
-      }
-      if (e.content) {
+        this.requestSessionBriefRefresh();
+      } else if (e.content) {
         for (let part of e.content.parts) {
           index += 1;
           this.processPart(e, part, index);
@@ -1069,7 +1043,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.webSocketService.closeConnection();
-    this.sessionBriefRefreshSub?.unsubscribe();
   }
 
   onAppSelection(event: any) {
