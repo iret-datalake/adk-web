@@ -51,6 +51,7 @@ export class StateTabComponent implements OnChanges {
 
   private asanaState: any = {};
   private fallbackIdCounter = 0;
+  private readonly suppressedStateKeyPrefixes: string[] = ['session_brief'];
 
   ngOnChanges(changes: SimpleChanges): void {
     if ('sessionState' in changes) {
@@ -113,7 +114,7 @@ export class StateTabComponent implements OnChanges {
   private resetPlatformState(): void {
     const state = this.sessionState ?? {};
     this.availablePlatforms = Object.keys(state || {})
-        .filter((platform) => platform !== 'session_brief')
+        .filter((platform) => this.shouldDisplayStateKey(platform))
         .sort();
     this.platformStates = {};
 
@@ -350,5 +351,13 @@ export class StateTabComponent implements OnChanges {
     }
 
     return true;
+  }
+
+  private shouldDisplayStateKey(key: string): boolean {
+    if (!key) {
+      return false;
+    }
+    const normalizedKey = key.toLowerCase();
+    return !this.suppressedStateKeyPrefixes.some((prefix) => normalizedKey.startsWith(prefix));
   }
 }

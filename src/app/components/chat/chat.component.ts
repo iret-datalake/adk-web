@@ -519,6 +519,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedFiles = [];
     let index = this.eventMessageIndexArray.length - 1;
     this.streamingTextMessage = null;
+    let sessionBriefRefreshQueued = false;
     this.agentService.runSse(req).subscribe({
       next: async (chunk) => {
         if (chunk.startsWith('{"error"')) {
@@ -531,7 +532,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           return;
         }
         if (chunkJson.sessionBriefRefreshRequired) {
-          this.requestSessionBriefRefresh();
+          sessionBriefRefreshQueued = true;
           return;
         }
         if (chunkJson.content) {
@@ -546,7 +547,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       error: (err) => console.error('SSE error:', err),
       complete: () => {
         this.streamingTextMessage = null;
-        this.requestSessionBriefRefresh();
+        if (sessionBriefRefreshQueued) {
+          this.requestSessionBriefRefresh();
+        }
         this.eventService.getTrace(this.sessionId)
             .pipe(catchError((error) => {
               if (error.status === 404) {
@@ -941,15 +944,21 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private processRunSseResponse(response: any) {
     let index = this.eventMessageIndexArray.length - 1;
+    let sessionBriefRefreshQueued = false;
     for (const e of response) {
       if (e.sessionBriefRefreshRequired) {
-        this.requestSessionBriefRefresh();
-      } else if (e.content) {
+        sessionBriefRefreshQueued = true;
+        continue;
+      }
+      if (e.content) {
         for (let part of e.content.parts) {
           index += 1;
           this.processPart(e, part, index);
         }
       }
+    }
+    if (sessionBriefRefreshQueued) {
+      this.requestSessionBriefRefresh();
     }
   }
 
