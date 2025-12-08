@@ -36,8 +36,8 @@
     } @else {
         <mat-accordion class="platform-accordion">
             @for (platform of availablePlatforms; track platform) {
-            <mat-expansion-panel [ngClass]="['platform-panel-wrapper', 'platform-panel-wrapper-' + platform]" [expanded]="isPanelExpanded(platform)" (opened)="onPanelOpened(platform)">
-                    <mat-expansion-panel-header [ngStyle]="{'background-color': getPlatformAccent(platform)}" [ngClass]="getPlatformPanelClass(platform)">
+                <mat-expansion-panel [ngClass]="['platform-panel-wrapper', 'platform-panel-wrapper-' + platform]" [expanded]="isPanelExpanded(platform)" (opened)="onPanelOpened(platform)" [ngStyle]="{'--platform-body-color': getPlatformBodyColor(platform)}">
+                    <mat-expansion-panel-header [ngClass]="getPlatformPanelClass(platform)">
                         <div class="platform-header">
                             <div class="platform-title">{{ platform | titlecase }}</div>
                         </div>
@@ -102,19 +102,27 @@
                                                     </div>
                                                 </div>
 
-                                                <div class="task-description" *ngIf="task.description">
-                                                    {{ task.description }}
+                                                <div class="task-description-block" *ngIf="task.description">
+                                                    <div class="task-description" [ngClass]="{'collapsed': !isAsanaDescriptionExpanded(task.gid)}">
+                                                        {{ task.description }}
+                                                    </div>
                                                 </div>
+
                                             </div>
 
                                             <footer class="task-card-footer">
+                                                <button
+                                                    type="button"
+                                                    class="expand-toggle"
+                                                    *ngIf="shouldShowAsanaDescription(task)"
+                                                    [attr.aria-expanded]="isAsanaDescriptionExpanded(task.gid)"
+                                                    (click)="toggleAsanaDescription(task.gid)">
+                                                    {{ isAsanaDescriptionExpanded(task.gid) ? 'Show less' : 'Show more' }}
+                                                </button>
                                                 <a *ngIf="task.permalinkUrl" [href]="task.permalinkUrl" target="_blank" rel="noopener noreferrer">
                                                     Open in Asana
                                                     <span class="material-symbols-outlined">open_in_new</span>
                                                 </a>
-                                                <span class="task-updated" *ngIf="task.lastUpdated">
-                                                    Updated {{ task.lastUpdated | date:'MMM d, y, h:mm a' }}
-                                                </span>
                                             </footer>
                                         </article>
                                     }
@@ -122,6 +130,176 @@
                             } @else {
                                 <div class="state-empty">
                                     <p>No Asana tasks are currently available.</p>
+                                </div>
+                            }
+                        } @else if (platform === 'gdrive') {
+                            @if (hasDriveFiles()) {
+                                <div class="asana-task-list">
+                                    @for (file of driveFiles; track file) {
+                                        <article class="asana-task-card drive-file-card">
+                                            <header class="task-card-header">
+                                                <div class="task-header-text">
+                                                    <div class="task-title">{{ file.name }}</div>
+                                                </div>
+                                            </header>
+
+                                            <footer class="task-card-footer">
+                                                <a *ngIf="file.webViewLink" [href]="file.webViewLink" target="_blank" rel="noopener noreferrer">
+                                                    Open in Drive
+                                                    <span class="material-symbols-outlined">open_in_new</span>
+                                                </a>
+                                            </footer>
+                                        </article>
+                                    }
+                                </div>
+                            } @else {
+                                <div class="state-empty">
+                                    <p>No Google Drive files are currently available.</p>
+                                </div>
+                            }
+                        } @else if (platform === 'backlog') {
+                            @if (hasBacklogIssues()) {
+                                <div class="asana-task-list">
+                                    @for (issue of backlogIssues; track issue.issueKey) {
+                                        <article class="asana-task-card backlog-issue-card" [ngClass]="issue.statusCategory">
+                                            <header class="task-card-header">
+                                                <div class="task-header-text">
+                                                    <div class="task-title">{{ issue.summary }}</div>
+                                                    <div class="task-id">#{{ issue.issueKey }}</div>
+                                                </div>
+                                                <span [ngClass]="getStatusPillClass(issue)">
+                                                    {{ issue.statusLabel ?? (issue.completed ? 'Completed' : issue.overdue ? 'Overdue' : 'Active') }}
+                                                </span>
+                                            </header>
+
+                                            <div class="task-card-body">
+                                                <div class="task-meta-row" *ngIf="issue.assigneeName || issue.dueDate">
+                                                    <div class="task-meta" *ngIf="issue.assigneeName">
+                                                        <span class="meta-label">Assignee</span>
+                                                        <span class="meta-value">{{ issue.assigneeName }}</span>
+                                                    </div>
+                                                    <div class="task-meta" *ngIf="issue.dueDate">
+                                                        <span class="meta-label">Due</span>
+                                                        <span class="meta-value" [ngClass]="{'overdue': issue.overdue}">
+                                                            {{ issue.dueDate | date:'MMM d, y' }}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-meta-row" *ngIf="issue.priority || issue.issueTypeName">
+                                                    <div class="task-meta" *ngIf="issue.priority">
+                                                        <span class="meta-label">Priority</span>
+                                                        <span class="meta-chip">{{ issue.priority }}</span>
+                                                    </div>
+                                                    <div class="task-meta" *ngIf="issue.issueTypeName">
+                                                        <span class="meta-label">Type</span>
+                                                        <span class="meta-chip ghost">{{ issue.issueTypeName }}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-meta-row" *ngIf="issue.categoryNames.length">
+                                                    <div class="task-meta">
+                                                        <span class="meta-label">Categories</span>
+                                                        <div class="meta-pills">
+                                                            @for (category of issue.categoryNames; track category) {
+                                                                <span class="meta-chip ghost">{{ category }}</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-meta-row" *ngIf="issue.milestoneNames.length">
+                                                    <div class="task-meta">
+                                                        <span class="meta-label">Milestones</span>
+                                                        <div class="meta-pills">
+                                                            @for (milestone of issue.milestoneNames; track milestone) {
+                                                                <span class="meta-chip">{{ milestone }}</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-meta-row" *ngIf="issue.versionNames.length">
+                                                    <div class="task-meta">
+                                                        <span class="meta-label">Versions</span>
+                                                        <div class="meta-pills">
+                                                            @for (version of issue.versionNames; track version) {
+                                                                <span class="meta-chip ghost">{{ version }}</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-description-block" *ngIf="issue.description">
+                                                    <div class="task-description" [ngClass]="{'collapsed': !isBacklogDescriptionExpanded(issue.issueKey)}">
+                                                        {{ issue.description }}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <footer class="task-card-footer">
+                                                <button
+                                                    type="button"
+                                                    class="expand-toggle"
+                                                    *ngIf="shouldShowBacklogDescription(issue)"
+                                                    [attr.aria-expanded]="isBacklogDescriptionExpanded(issue.issueKey)"
+                                                    (click)="toggleBacklogDescription(issue.issueKey)">
+                                                    {{ isBacklogDescriptionExpanded(issue.issueKey) ? 'Show less' : 'Show more' }}
+                                                </button>
+                                                <a *ngIf="issue.permalinkUrl" [href]="issue.permalinkUrl" target="_blank" rel="noopener noreferrer">
+                                                    Open in Backlog
+                                                    <span class="material-symbols-outlined">open_in_new</span>
+                                                </a>
+                                            </footer>
+                                        </article>
+                                    }
+                                </div>
+                            } @else {
+                                <div class="state-empty">
+                                    <p>No Backlog issues are currently available.</p>
+                                </div>
+                            }
+                        } @else if (platform === 'slack') {
+                            @if (hasSlackMessages()) {
+                                <div class="asana-task-list">
+                                    @for (message of slackMessages; track message.id) {
+                                        <article class="asana-task-card slack-message-card">
+                                            <header class="task-card-header">
+                                                <div class="task-header-text">
+                                                    <div class="task-title">
+                                                        {{ message.userName || 'Unknown sender' }}
+                                                    </div>
+                                                    <div class="task-id" *ngIf="message.channelLabel">
+                                                        {{ message.channelLabel }}
+                                                    </div>
+                                                </div>
+                                                <!-- Timestamp hidden per request -->
+                                            </header>
+
+                                            <div class="slack-message-body" [ngClass]="{'collapsed': !isSlackMessageExpanded(message.id)}">
+                                                {{ message.text || 'No message text available.' }}
+                                            </div>
+
+                                            <footer class="task-card-footer slack-message-actions">
+                                                <button
+                                                    type="button"
+                                                    class="expand-toggle"
+                                                    *ngIf="shouldShowSlackToggle(message)"
+                                                    [attr.aria-expanded]="isSlackMessageExpanded(message.id)"
+                                                    (click)="toggleSlackMessageExpansion(message.id)">
+                                                    {{ isSlackMessageExpanded(message.id) ? 'Show less' : 'Show more' }}
+                                                </button>
+                                                <a *ngIf="message.permalink" [href]="message.permalink" target="_blank" rel="noopener noreferrer">
+                                                    Open in Slack
+                                                    <span class="material-symbols-outlined">open_in_new</span>
+                                                </a>
+                                            </footer>
+                                        </article>
+                                    }
+                                </div>
+                            } @else {
+                                <div class="state-empty">
+                                    <p>No Slack messages are currently available.</p>
                                 </div>
                             }
                         } @else {
