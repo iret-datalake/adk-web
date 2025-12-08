@@ -31,3 +31,4 @@ e2e/*.map
 .DS_Store
 package-lock.json
 adk_web_rebuild.sh
+front-end-build.log
