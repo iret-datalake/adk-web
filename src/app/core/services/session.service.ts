@@ -68,6 +68,18 @@ export class SessionService {
     return this.http.get<{sessionId: string; brief: string}>(url);
   }
 
+  pruneSessionState(
+      userId: string,
+      appName: string,
+      sessionId: string,
+      operations: Array<{path: string[]; removeIds?: string[]; keepLatest?: number; clearPath?: boolean; idField?: string | null}>,
+  ) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/sessions/${sessionId}/state/prune`;
+
+    return this.http.post<{sessionId: string; updatedKeys: string[]; skippedPaths: string[]}>(url, {operations});
+  }
+
   importSession(userId: string, appName: string, events: any[]) {
     if (this.apiServerDomain != undefined) {
       const url = this.apiServerDomain +

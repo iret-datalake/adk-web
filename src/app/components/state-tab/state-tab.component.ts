@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-import {Component, Input, OnChanges, SimpleChanges} from '@angular/core';
+import {Component, EventEmitter, Input, OnChanges, Output, SimpleChanges} from '@angular/core';
+import {take} from 'rxjs';
+
+import {SessionService} from '../../core/services/session.service';
 
 type PlatformStatusCategory = 'completed' | 'overdue' | 'upcoming' | 'active';
 
@@ -79,6 +82,11 @@ interface SlackMessageCard {
 })
 export class StateTabComponent implements OnChanges {
   @Input() sessionState: any = {};
+  @Input() appName = '';
+  @Input() userId = '';
+  @Input() sessionId = '';
+
+  @Output() sessionStateChange = new EventEmitter<any>();
 
   protected availablePlatforms: string[] = [];
   protected platformStates: Record<string, any> = {};
@@ -90,6 +98,9 @@ export class StateTabComponent implements OnChanges {
   protected slackMessageExpansion: Record<string, boolean> = {};
   protected asanaDescriptionExpansion: Record<string, boolean> = {};
   protected backlogDescriptionExpansion: Record<string, boolean> = {};
+  protected editingPlatforms: Record<string, boolean> = {};
+  protected selectedCardIds: Record<string, Record<string, boolean>> = {};
+  protected isPruningPlatform: Record<string, boolean> = {};
 
   private asanaState: any = {};
   private driveState: any = {};
@@ -97,6 +108,8 @@ export class StateTabComponent implements OnChanges {
   private slackState: any = {};
   private fallbackIdCounter = 0;
   private readonly suppressedStateKeyPrefixes: string[] = ['session_brief'];
+
+  constructor(private readonly sessionService: SessionService) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if ('sessionState' in changes) {
@@ -159,6 +172,88 @@ export class StateTabComponent implements OnChanges {
     return text.length > 220 || text.includes('\n') || text.includes('\r');
   }
 
+  protected isEditing(platform: string): boolean {
+    return Boolean(this.editingPlatforms[platform]);
+  }
+
+  protected toggleEdit(platform: string): void {
+    this.editingPlatforms[platform] = !this.editingPlatforms[platform];
+    if (!this.editingPlatforms[platform]) {
+      this.clearSelections(platform);
+    }
+  }
+
+  protected onEditButtonClick(platform: string, event: Event): void {
+    event.stopPropagation();
+    const currentlyEditing = this.isEditing(platform);
+
+    // In view mode, opening edit should expand the panel if it is collapsed.
+    if (!currentlyEditing && !this.isPanelExpanded(platform)) {
+      this.setExpandedPlatform(platform);
+    }
+
+    this.toggleEdit(platform);
+  }
+
+  protected onDeleteSelected(platform: string, event: Event): void {
+    event.stopPropagation();
+    this.deleteSelected(platform);
+  }
+
+  protected onSelectAll(platform: string, event: Event): void {
+    event.stopPropagation();
+    if (this.isPruningPlatform[platform]) {
+      return;
+    }
+    const ids = this.collectIdsForPlatform(platform);
+    if (!ids.length) {
+      return;
+    }
+    const selection: Record<string, boolean> = {};
+    ids.forEach((id) => {
+      selection[id] = true;
+    });
+    this.selectedCardIds[platform] = selection;
+  }
+
+  protected isCardSelected(platform: string, id: string): boolean {
+    return Boolean(this.selectedCardIds[platform]?.[id]);
+  }
+
+  protected toggleCardSelection(platform: string, id: string, checked: boolean): void {
+    const current = this.selectedCardIds[platform] ?? {};
+    if (checked) {
+      current[id] = true;
+    } else {
+      delete current[id];
+    }
+    this.selectedCardIds[platform] = current;
+  }
+
+  protected selectedCount(platform: string): number {
+    return Object.keys(this.selectedCardIds[platform] ?? {}).length;
+  }
+
+  protected deleteSelected(platform: string): void {
+    const ids = Object.keys(this.selectedCardIds[platform] ?? {});
+    if (!ids.length) {
+      return;
+    }
+    if (this.isPruningPlatform[platform]) {
+      return;
+    }
+    this.deletePlatformItems(platform, ids);
+  }
+
+  protected deleteCard(platform: string, id: string, event?: Event): void {
+    event?.stopPropagation();
+    event?.preventDefault();
+    if (this.isPruningPlatform[platform]) {
+      return;
+    }
+    this.deletePlatformItems(platform, [id]);
+  }
+
   protected getStatusPillClass(item: {statusCategory: PlatformStatusCategory}): string {
     switch (item.statusCategory) {
       case 'completed':
@@ -172,8 +267,220 @@ export class StateTabComponent implements OnChanges {
     }
   }
 
+  private deletePlatformItems(platform: string, ids: string[]): void {
+    if (!ids.length) {
+      return;
+    }
+
+    if (this.isPruningPlatform[platform]) {
+      return;
+    }
+
+    const operations = this.buildPruneOperations(platform, ids);
+    if (!operations.length) {
+      return;
+    }
+
+    // If context is missing, fall back to local-only pruning to keep UI responsive.
+    if (!this.appName || !this.userId || !this.sessionId) {
+      this.applyLocalPrune(platform, ids);
+      return;
+    }
+
+    this.isPruningPlatform[platform] = true;
+    this.sessionService
+        .pruneSessionState(this.userId, this.appName, this.sessionId, operations)
+        .pipe(take(1))
+        .subscribe({
+          next: () => {
+            this.applyLocalPrune(platform, ids);
+            this.refreshSessionStateFromServer();
+          },
+          error: () => {
+            this.isPruningPlatform[platform] = false;
+          },
+          complete: () => {
+            this.isPruningPlatform[platform] = false;
+          },
+        });
+  }
+
+  private refreshSessionStateFromServer(): void {
+    if (!this.userId || !this.appName || !this.sessionId) {
+      return;
+    }
+
+    this.sessionService
+        .getSession(this.userId, this.appName, this.sessionId)
+        .pipe(take(1))
+        .subscribe({
+          next: (session) => {
+            if (!session) {
+              return;
+            }
+            this.sessionState = session.state ?? {};
+            this.sessionStateChange.emit({...this.sessionState});
+            this.resetPlatformState();
+          },
+          error: () => {},
+        });
+  }
+
+  private buildPruneOperations(platform: string, ids: string[]): Array<{path: string[]; removeIds: string[]}> {
+    switch (platform) {
+      case 'asana':
+        return [{path: ['asana', 'tasks'], removeIds: ids}];
+      case 'gdrive':
+        return [
+          {path: ['gdrive', 'documents'], removeIds: ids},
+          {path: ['gdrive', 'files'], removeIds: ids},
+          {path: ['gdrive', 'items'], removeIds: ids},
+        ];
+      case 'backlog':
+        return [
+          {path: ['backlog', 'issues'], removeIds: ids},
+          {path: ['backlog'], removeIds: ids},
+        ];
+      case 'slack':
+        return [
+          {path: ['slack', 'messages'], removeIds: ids},
+          {path: ['slack'], removeIds: ids},
+        ];
+      default:
+        return [];
+    }
+  }
+
+  private applyLocalPrune(platform: string, ids: string[]): void {
+    const idSet = new Set(ids);
+
+    if (platform === 'asana') {
+      this.asanaTasks = this.asanaTasks.filter((task) => !idSet.has(task.gid));
+      this.asanaDescriptionExpansion = {};
+    }
+    if (platform === 'gdrive') {
+      this.driveFiles = this.driveFiles.filter((file) => !idSet.has(file.id));
+    }
+    if (platform === 'backlog') {
+      this.backlogIssues = this.backlogIssues.filter((issue) => !idSet.has(issue.issueKey));
+      this.backlogDescriptionExpansion = {};
+    }
+    if (platform === 'slack') {
+      this.slackMessages = this.slackMessages.filter((message) => !idSet.has(message.id));
+      this.slackMessageExpansion = {};
+    }
+
+    const updatedPlatformState = this.pruneRawPlatformState(platform, idSet);
+    if (updatedPlatformState !== null) {
+      this.platformStates[platform] = updatedPlatformState;
+      this.sessionState = {...this.sessionState, [platform]: updatedPlatformState};
+      this.sessionStateChange.emit({...this.sessionState});
+    }
+
+    this.clearSelections(platform);
+  }
+
+  private pruneRawPlatformState(platform: string, ids: Set<string>): any {
+    const current = this.platformStates[platform];
+    if (current === undefined || current === null) {
+      return null;
+    }
+
+    const clone = JSON.parse(JSON.stringify(current));
+    const operations = this.buildPruneOperations(platform, Array.from(ids));
+    operations.forEach((operation) => {
+      this.pruneRawStateAtPath(clone, operation.path, ids);
+    });
+    return clone;
+  }
+
+  private pruneRawStateAtPath(root: any, path: string[], ids: Set<string>): void {
+    if (!path.length) {
+      return;
+    }
+    let cursor: any = root;
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const segment = path[index];
+      if (!cursor || typeof cursor !== 'object') {
+        return;
+      }
+      cursor = cursor[segment];
+    }
+
+    if (!cursor || typeof cursor !== 'object') {
+      return;
+    }
+
+    const leafKey = path[path.length - 1];
+    const target = cursor[leafKey];
+
+    if (Array.isArray(target)) {
+      cursor[leafKey] = target.filter((entry) => !this.matchesSelectedId(entry, ids));
+      return;
+    }
+
+    if (target && typeof target === 'object') {
+      Object.keys(target).forEach((key) => {
+        if (ids.has(key) || this.matchesSelectedId(target[key], ids)) {
+          delete target[key];
+        }
+      });
+    }
+  }
+
+  private matchesSelectedId(entry: any, ids: Set<string>): boolean {
+    if (!ids.size || entry === null || entry === undefined) {
+      return false;
+    }
+
+    if (typeof entry === 'string' || typeof entry === 'number') {
+      return ids.has(String(entry));
+    }
+
+    if (typeof entry === 'object') {
+      const candidates = [entry['gid'], entry['id'], entry['issueKey'], entry['key'], entry['messageId']];
+      return candidates.some((candidate) => candidate !== undefined && candidate !== null && ids.has(String(candidate)));
+    }
+
+    return false;
+  }
+
+  private collectIdsForPlatform(platform: string): string[] {
+    switch (platform) {
+      case 'asana':
+        return this.asanaTasks.map((task) => task.gid).filter(Boolean);
+      case 'gdrive':
+        return this.driveFiles.map((file) => file.id).filter(Boolean);
+      case 'backlog':
+        return this.backlogIssues.map((issue) => issue.issueKey).filter(Boolean);
+      case 'slack':
+        return this.slackMessages.map((message) => message.id).filter(Boolean);
+      default:
+        return [];
+    }
+  }
+
+  private clearSelections(platform: string): void {
+    this.selectedCardIds[platform] = {};
+  }
+
   protected isPanelExpanded(platform: string): boolean {
     return this.expandedPlatform === platform;
+  }
+
+  private setExpandedPlatform(platform: string): void {
+    if (this.expandedPlatform === platform) {
+      return;
+    }
+
+    this.expandedPlatform = platform;
+    this.onPanelOpened(platform);
+  }
+
+  protected onPanelClosed(platform: string): void {
+    if (this.expandedPlatform === platform) {
+      this.expandedPlatform = null;
+    }
   }
 
   protected onPanelOpened(platform: string): void {

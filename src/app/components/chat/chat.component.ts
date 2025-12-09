@@ -562,6 +562,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
               this.changeDetectorRef.detectChanges();
             });
         this.traceService.setMessages(this.messages);
+        this.refreshSessionStateFromServer();
       },
     });
     // Clear input
@@ -960,6 +961,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     if (sessionBriefRefreshQueued) {
       this.requestSessionBriefRefresh();
     }
+    this.refreshSessionStateFromServer();
   }
 
   openDialog(): void {
@@ -1427,6 +1429,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.currentSessionState = session.state;
   }
 
+  protected onSessionStateChanged(state: any): void {
+    this.currentSessionState = state ?? {};
+    this.changeDetectorRef.detectChanges();
+  }
+
   onNewSessionClick() {
     this.createSession();
     this.eventData.clear();
@@ -1651,6 +1658,28 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     return mimeType.replace('/', '.');
+  }
+
+  private refreshSessionStateFromServer(): void {
+    if (!this.userId || !this.appName || !this.sessionId) {
+      return;
+    }
+
+    this.sessionService
+        .getSession(this.userId, this.appName, this.sessionId)
+        .pipe(take(1))
+        .subscribe({
+          next: (session) => {
+            if (!session) {
+              return;
+            }
+            this.currentSessionState = session.state ?? {};
+            this.changeDetectorRef.detectChanges();
+          },
+          error: (error) => {
+            console.error('Failed to refresh session state', error);
+          },
+        });
   }
 
   protected exportSession() {
