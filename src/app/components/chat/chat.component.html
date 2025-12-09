@@ -678,8 +678,9 @@
               placeholder="Type a Message..."
               style="caret-color: black"
             ></textarea>
-            <!-- attach file and microphone input buttons here , comment out for now -->
-            <!-- <div class="chat-input-actions">
+            <div class="chat-input-actions">
+              <!-- File upload is currently disabled; uncomment to enable -->
+              <!--
               <button
                 mat-icon-button
                 (click)="fileInput.click()"
@@ -688,6 +689,8 @@
               >
                 <mat-icon>attach_file</mat-icon>
               </button>
+              -->
+              <!--
               <div>
                 <button
                   mat-icon-button
@@ -712,7 +715,18 @@
                   <mat-icon>videocam</mat-icon>
                 </button>
               </div>
-            </div> -->
+              -->
+
+              <button
+                mat-mini-fab
+                color="primary"
+                class="send-button"
+                type="button"
+                aria-label="Send message"
+                (click)="sendMessage($event)">
+                <mat-icon>send</mat-icon>
+              </button>
+            </div>
           </mat-form-field>
         </div>
       }
