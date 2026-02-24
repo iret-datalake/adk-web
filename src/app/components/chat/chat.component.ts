@@ -517,17 +517,39 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       streaming: this.useSse,
     };
     this.selectedFiles = [];
+    this.runSseWithAuthRetry(req);
+    // Clear input
+    this.userInput = '';
+    this.changeDetectorRef.detectChanges();
+  }
+
+  private runSseWithAuthRetry(
+    req: AgentRunRequest,
+    options?: { suppressLoading?: boolean; authRetryCount?: number },
+  ) {
     let index = this.eventMessageIndexArray.length - 1;
     this.streamingTextMessage = null;
     let sessionBriefRefreshQueued = false;
-    this.agentService.runSse(req).subscribe({
+    const authRetryCount = options?.authRetryCount ?? 0;
+    this.agentService.runSse(req, { suppressLoading: options?.suppressLoading ?? false }).subscribe({
       next: async (chunk) => {
-        if (chunk.startsWith('{"error"')) {
-          this.openSnackBar(chunk, 'OK');
-          return;
-        }
         const chunkJson = JSON.parse(chunk);
         if (chunkJson.error) {
+          if (chunkJson.requiresAuth === 'asana' && chunkJson.authUrl) {
+            if (authRetryCount >= 1) {
+              this.openSnackBar('Asana authorization did not complete. Please try again.', 'OK');
+              return;
+            }
+
+            const authCompleted = await this.startAsanaOAuthPopupAndWait(chunkJson.authUrl);
+            if (!authCompleted) {
+              this.openSnackBar('Asana authorization was not completed.', 'OK');
+              return;
+            }
+            this.openSnackBar('Asana connected. Continuing your request...', 'OK');
+            this.runSseWithAuthRetry(req, { suppressLoading: true, authRetryCount: authRetryCount + 1 });
+            return;
+          }
           this.openSnackBar(chunkJson.error, 'OK');
           return;
         }
@@ -565,9 +587,102 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         this.refreshSessionStateFromServer();
       },
     });
-    // Clear input
-    this.userInput = '';
-    this.changeDetectorRef.detectChanges();
+  }
+
+  private async startAsanaOAuthPopupAndWait(authUrlRaw: string): Promise<boolean> {
+    let popupUrl: URL;
+    try {
+      const apiBase = URLUtil.getApiServerBaseUrl() || window.location.origin;
+      popupUrl = new URL(authUrlRaw, apiBase);
+      const popupCompleteUrl = new URL('/oauth/asana/popup-complete', apiBase);
+      popupUrl.searchParams.set('return_to', popupCompleteUrl.toString());
+    } catch (error) {
+      console.error('Failed to build Asana OAuth popup URL', error);
+      return false;
+    }
+
+    const popupWindow = window.open(
+      popupUrl.toString(),
+      'asana-oauth-popup',
+      'popup,width=640,height=800',
+    );
+
+    if (!popupWindow) {
+      this.openSnackBar('Popup was blocked. Please allow popups and try again.', 'OK');
+      return false;
+    }
+
+    this.openSnackBar('Please complete Asana authorization in the opened tab.', 'OK');
+
+    return await this.waitForAsanaAuthInSession(popupWindow, 120000, 1500);
+  }
+
+  private waitForAsanaAuthInSession(
+    popupWindow: Window,
+    timeoutMs: number,
+    intervalMs: number,
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      let done = false;
+      let settled = false;
+
+      const complete = (result: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        done = true;
+        window.removeEventListener('message', onMessage);
+        resolve(result);
+      };
+
+      const onMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) {
+          return;
+        }
+        if (event.data?.type === 'asana_oauth_connected') {
+          complete(true);
+        }
+      };
+
+      window.addEventListener('message', onMessage);
+
+      const timeoutId = window.setTimeout(() => {
+        complete(false);
+      }, timeoutMs);
+
+      const poll = () => {
+        if (done) {
+          window.clearTimeout(timeoutId);
+          return;
+        }
+
+        if (popupWindow.closed) {
+          complete(false);
+          window.clearTimeout(timeoutId);
+          return;
+        }
+
+        this.sessionService.getSession(this.userId, this.appName, this.sessionId)
+          .pipe(take(1))
+          .subscribe({
+            next: (session: Session) => {
+              const token = session?.state?.asana_oauth?.access_token;
+              if (typeof token === 'string' && token.length > 0) {
+                complete(true);
+                window.clearTimeout(timeoutId);
+                return;
+              }
+              window.setTimeout(poll, intervalMs);
+            },
+            error: () => {
+              window.setTimeout(poll, intervalMs);
+            },
+          });
+      };
+
+      poll();
+    });
   }
 
   private requestSessionBriefRefresh() {
