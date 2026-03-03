@@ -625,6 +625,14 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     return new Promise((resolve) => {
       let done = false;
       let settled = false;
+      let expectedApiOrigin: string | null = null;
+
+      try {
+        const apiBase = URLUtil.getApiServerBaseUrl() || window.location.origin;
+        expectedApiOrigin = new URL(apiBase).origin;
+      } catch {
+        expectedApiOrigin = null;
+      }
 
       const complete = (result: boolean) => {
         if (settled) {
@@ -637,7 +645,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       };
 
       const onMessage = (event: MessageEvent) => {
-        if (event.origin !== window.location.origin) {
+        const allowedOrigins = new Set<string>([window.location.origin]);
+        if (expectedApiOrigin) {
+          allowedOrigins.add(expectedApiOrigin);
+        }
+
+        if (!allowedOrigins.has(event.origin)) {
           return;
         }
         if (event.data?.type === 'asana_oauth_connected') {
@@ -657,12 +670,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           return;
         }
 
-        if (popupWindow.closed) {
-          complete(false);
-          window.clearTimeout(timeoutId);
-          return;
-        }
-
         this.sessionService.getSession(this.userId, this.appName, this.sessionId)
           .pipe(take(1))
           .subscribe({
@@ -673,9 +680,21 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
                 window.clearTimeout(timeoutId);
                 return;
               }
+
+              if (popupWindow.closed) {
+                complete(false);
+                window.clearTimeout(timeoutId);
+                return;
+              }
+
               window.setTimeout(poll, intervalMs);
             },
             error: () => {
+              if (popupWindow.closed) {
+                complete(false);
+                window.clearTimeout(timeoutId);
+                return;
+              }
               window.setTimeout(poll, intervalMs);
             },
           });
