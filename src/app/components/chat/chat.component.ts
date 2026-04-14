@@ -710,13 +710,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.sessionService
       .getSessionBrief(this.userId, this.appName, this.sessionId)
-      .pipe(
-        finalize(() => {
-          this.sessionTab.reloadSession(this.sessionId);
-        }),
-      )
       .subscribe({
-        next: () => {
+        next: (response) => {
+          if (response?.brief) {
+            this.sessionTab.updateSessionBriefInList(this.sessionId, response.brief);
+          }
         },
         error: (error) => {
           console.error('Failed to refresh session brief', error);

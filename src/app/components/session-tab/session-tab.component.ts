@@ -165,6 +165,19 @@ export class SessionTabComponent implements OnInit {
     };
   }
 
+  updateSessionBriefInList(sessionId: string, brief: string): void {
+    this.sessionList = this.sessionList.map((session) => {
+      if (session.id !== sessionId) {
+        return session;
+      }
+      const trimmed = typeof brief === 'string' ? brief.trim() : null;
+      return {
+        ...session,
+        sessionBrief: trimmed || session.sessionBrief || null,
+      };
+    });
+  }
+
   private extractBriefFromState(session: any): string | null {
     const state = session?.state;
     if (!state || typeof state !== 'object') {
