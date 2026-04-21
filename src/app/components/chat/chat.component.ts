@@ -550,6 +550,21 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             this.runSseWithAuthRetry(req, { suppressLoading: true, authRetryCount: authRetryCount + 1 });
             return;
           }
+          if (chunkJson.requiresAuth === 'github' && chunkJson.authUrl) {
+            if (authRetryCount >= 1) {
+              this.openSnackBar('GitHub authorization did not complete. Please try again.', 'OK');
+              return;
+            }
+
+            const authCompleted = await this.startGitHubOAuthPopupAndWait(chunkJson.authUrl);
+            if (!authCompleted) {
+              this.openSnackBar('GitHub authorization was not completed.', 'OK');
+              return;
+            }
+            this.openSnackBar('GitHub connected. Continuing your request...', 'OK');
+            this.runSseWithAuthRetry(req, { suppressLoading: true, authRetryCount: authRetryCount + 1 });
+            return;
+          }
           this.openSnackBar(chunkJson.error, 'OK');
           return;
         }
@@ -675,6 +690,124 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           .subscribe({
             next: (session: Session) => {
               const token = session?.state?.asana_oauth?.access_token;
+              if (typeof token === 'string' && token.length > 0) {
+                complete(true);
+                window.clearTimeout(timeoutId);
+                return;
+              }
+
+              if (popupWindow.closed) {
+                complete(false);
+                window.clearTimeout(timeoutId);
+                return;
+              }
+
+              window.setTimeout(poll, intervalMs);
+            },
+            error: () => {
+              if (popupWindow.closed) {
+                complete(false);
+                window.clearTimeout(timeoutId);
+                return;
+              }
+              window.setTimeout(poll, intervalMs);
+            },
+          });
+      };
+
+      poll();
+    });
+  }
+
+  private async startGitHubOAuthPopupAndWait(authUrlRaw: string): Promise<boolean> {
+    let popupUrl: URL;
+    try {
+      const apiBase = URLUtil.getApiServerBaseUrl() || window.location.origin;
+      popupUrl = new URL(authUrlRaw, apiBase);
+      const popupCompleteUrl = new URL('/oauth/github/popup-complete', apiBase);
+
+      popupUrl.searchParams.set('return_to', popupCompleteUrl.toString());
+      popupUrl.searchParams.set('prompt_select_account', 'true');
+      popupUrl.searchParams.set('reauthorize', 'true');
+    } catch (error) {
+      console.error('Failed to build GitHub OAuth popup URL', error);
+      return false;
+    }
+
+    const popupWindow = window.open(
+      popupUrl.toString(),
+      'github-oauth-popup',
+      'popup,width=640,height=800',
+    );
+
+    if (!popupWindow) {
+      this.openSnackBar('Popup was blocked. Please allow popups and try again.', 'OK');
+      return false;
+    }
+
+    this.openSnackBar('Please complete GitHub authorization in the opened tab.', 'OK');
+
+    return await this.waitForGitHubAuthInSession(popupWindow, 120000, 1500);
+  }
+
+  private waitForGitHubAuthInSession(
+    popupWindow: Window,
+    timeoutMs: number,
+    intervalMs: number,
+  ): Promise<boolean> {
+    return new Promise((resolve) => {
+      let done = false;
+      let settled = false;
+      let expectedApiOrigin: string | null = null;
+
+      try {
+        const apiBase = URLUtil.getApiServerBaseUrl() || window.location.origin;
+        expectedApiOrigin = new URL(apiBase).origin;
+      } catch {
+        expectedApiOrigin = null;
+      }
+
+      const complete = (result: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        done = true;
+        window.removeEventListener('message', onMessage);
+        resolve(result);
+      };
+
+      const onMessage = (event: MessageEvent) => {
+        const allowedOrigins = new Set<string>([window.location.origin]);
+        if (expectedApiOrigin) {
+          allowedOrigins.add(expectedApiOrigin);
+        }
+
+        if (!allowedOrigins.has(event.origin)) {
+          return;
+        }
+        if (event.data?.type === 'github_oauth_connected') {
+          complete(true);
+        }
+      };
+
+      window.addEventListener('message', onMessage);
+
+      const timeoutId = window.setTimeout(() => {
+        complete(false);
+      }, timeoutMs);
+
+      const poll = () => {
+        if (done) {
+          window.clearTimeout(timeoutId);
+          return;
+        }
+
+        this.sessionService.getSession(this.userId, this.appName, this.sessionId)
+          .pipe(take(1))
+          .subscribe({
+            next: (session: Session) => {
+              const token = session?.state?.github_oauth?.access_token;
               if (typeof token === 'string' && token.length > 0) {
                 complete(true);
                 window.clearTimeout(timeoutId);
