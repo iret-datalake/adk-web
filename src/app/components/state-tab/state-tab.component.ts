@@ -107,7 +107,12 @@ export class StateTabComponent implements OnChanges {
   private backlogState: any = {};
   private slackState: any = {};
   private fallbackIdCounter = 0;
-  private readonly suppressedStateKeyPrefixes: string[] = ['session_brief'];
+  // Only render genuine search-result platforms. Anything else in session
+  // state (OAuth tokens such as `asana_oauth`/`github_oauth`, the
+  // `session_brief*` keys, sub-agent outputs like `glossary_output`, etc.) is
+  // internal plumbing and must not surface as a "platform" panel.
+  private readonly displayablePlatforms: ReadonlySet<string> =
+      new Set(['asana', 'gdrive', 'backlog', 'slack', 'gmail']);
 
   constructor(private readonly sessionService: SessionService) {}
 
@@ -1351,7 +1356,6 @@ export class StateTabComponent implements OnChanges {
     if (!key) {
       return false;
     }
-    const normalizedKey = key.toLowerCase();
-    return !this.suppressedStateKeyPrefixes.some((prefix) => normalizedKey.startsWith(prefix));
+    return this.displayablePlatforms.has(key.toLowerCase());
   }
 }
