@@ -856,6 +856,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private processPart(chunkJson: any, part: any, index: number) {
+    if (part.text && this.isDelegatedSubAgentEvent(chunkJson)) {
+      this.storeEvents(part, chunkJson, index);
+      this.eventMessageIndexArray[index] = part.text;
+      return;
+    }
+
     const renderedContent =
       chunkJson.groundingMetadata?.searchEntryPoint?.renderedContent;
 
@@ -1145,6 +1151,17 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           },
         ];
       });
+  }
+
+  /**
+   * Whether the event comes from a single_turn/task sub-agent that the root
+   * agent invoked as a tool. ADK runs those in a sub-branch named
+   * `<agent>@<run_id>`; their text is the tool result, which the root agent
+   * relays in its own reply, so it is kept out of the chat (events panel only).
+   */
+  private isDelegatedSubAgentEvent(e: any): boolean {
+    return typeof e?.branch === 'string' &&
+        e.branch.split('.').some((segment: string) => segment.includes('@'));
   }
 
   private storeEvents(part: any, e: any, index: number) {
@@ -1492,8 +1509,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
     session.events.forEach((event: any) => {
       event.content?.parts?.forEach((part: any) => {
-        this.storeMessage(
-          part, event, index, event.author === 'user' ? 'user' : 'bot');
+        if (part.text && this.isDelegatedSubAgentEvent(event)) {
+          this.eventMessageIndexArray[index] = part.text;
+        } else {
+          this.storeMessage(
+            part, event, index, event.author === 'user' ? 'user' : 'bot');
+        }
         index += 1;
         if (event.author && event.author !== 'user') {
           this.storeEvents(part, event, index);
