@@ -525,13 +525,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private runSseWithAuthRetry(
     req: AgentRunRequest,
-    options?: { suppressLoading?: boolean; authRetryCount?: number },
+    options?: { authRetryCount?: number },
   ) {
     let index = this.eventMessageIndexArray.length - 1;
     this.streamingTextMessage = null;
     let sessionBriefRefreshQueued = false;
     const authRetryCount = options?.authRetryCount ?? 0;
-    this.agentService.runSse(req, { suppressLoading: options?.suppressLoading ?? false }).subscribe({
+    this.agentService.runSse(req).subscribe({
       next: async (chunk) => {
         const chunkJson = JSON.parse(chunk);
         if (chunkJson.error) {
@@ -547,7 +547,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
               return;
             }
             this.openSnackBar('Asana connected. Continuing your request...', 'OK');
-            this.runSseWithAuthRetry(req, { suppressLoading: true, authRetryCount: authRetryCount + 1 });
+            this.runSseWithAuthRetry(req, { authRetryCount: authRetryCount + 1 });
             return;
           }
           if (chunkJson.requiresAuth === 'github' && chunkJson.authUrl) {
@@ -562,7 +562,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
               return;
             }
             this.openSnackBar('GitHub connected. Continuing your request...', 'OK');
-            this.runSseWithAuthRetry(req, { suppressLoading: true, authRetryCount: authRetryCount + 1 });
+            this.runSseWithAuthRetry(req, { authRetryCount: authRetryCount + 1 });
             return;
           }
           this.openSnackBar(chunkJson.error, 'OK');
