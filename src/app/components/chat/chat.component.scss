@@ -352,10 +352,12 @@
 
 // Activity panel: thoughts and tool calls of one turn, folded into one block.
 .activity-panel {
-  flex: 1;
+  // Sized to its content (the current step / summary), not the whole row.
+  flex: 0 1 auto;
+  width: fit-content;
   min-width: 0;
-  max-width: 720px;
-  margin: 5px 0 5px 4px;
+  max-width: min(720px, calc(100% - 72px));
+  margin: 5px 16px 5px 4px;
   border: 1px solid #dadce0;
   border-radius: 12px;
   background-color: #f8f9fa;
@@ -368,11 +370,14 @@
 }
 
 .activity-header {
+  // The component-wide `button` rule adds 20px side margins.
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 8px;
+  box-sizing: border-box;
   width: 100%;
-  padding: 8px 12px;
+  padding: 8px 10px 8px 12px;
   border: none;
   background: transparent;
   color: #3c4043;
@@ -410,6 +415,7 @@
 
 .activity-chevron {
   flex-shrink: 0;
+  margin-left: 4px;
   color: #5f6368;
   transition: transform 0.25s ease;
 
@@ -423,11 +429,9 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  height: 66px;
-  padding: 0 12px 8px 36px;
+  // Grows with the steps shown (up to ACTIVITY_ROLLING_STEPS lines).
+  padding: 0 16px 8px 36px;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 45%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 45%);
 }
 
 .activity-rolling-line {
@@ -437,12 +441,18 @@
   font-size: 13px;
   line-height: 20px;
   color: #80868b;
+  opacity: 0.6;
   white-space: nowrap;
   overflow: hidden;
   animation: activity-roll-in 0.3s ease-out;
 
+  &:nth-last-child(2) {
+    opacity: 0.8;
+  }
+
   &.current {
     color: #202124;
+    opacity: 1;
   }
 
   &.nested {
@@ -519,9 +529,12 @@
 }
 
 .activity-step-line {
+  // The component-wide `button` rule adds 20px side margins.
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 8px;
+  box-sizing: border-box;
   width: 100%;
   padding: 4px 6px;
   border: none;
@@ -1022,6 +1035,8 @@ button {
 }
 
 .thought-toggle {
+  // The component-wide `button` rule adds 20px side margins.
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 6px;
