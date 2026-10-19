@@ -26,7 +26,7 @@ import {MatSnackBar} from '@angular/material/snack-bar';
 import {DomSanitizer, SafeHtml} from '@angular/platform-browser';
 import {ActivatedRoute, NavigationEnd, Router} from '@angular/router';
 import {instance} from '@viz-js/viz';
-import {BehaviorSubject, catchError, combineLatest, distinctUntilChanged, finalize, filter, map, Observable, of, shareReplay, switchMap, take, tap} from 'rxjs';
+import {BehaviorSubject, catchError, combineLatest, distinctUntilChanged, finalize, filter, map, Observable, of, shareReplay, Subscription, switchMap, take, tap} from 'rxjs';
 import stc from 'string-to-color';
 
 import {URLUtil} from '../../../utils/url-util';
@@ -102,6 +102,9 @@ const AGENT_TOOL_LABELS: Record<string, string> = {
   sub_agent_google_search: 'Google 検索',
 };
 
+/** error_code ADK puts on the events that seal a run stopped by the client. */
+const INVOCATION_ABORTED = 'INVOCATION_ABORTED';
+
 /** How many recent steps the collapsed activity panel keeps on screen. */
 const ACTIVITY_ROLLING_STEPS = 3;
 
@@ -115,6 +118,8 @@ export interface ActivityStep {
   text?: string;
   /** True for steps run inside a sub-agent (its own tool calls). */
   nested: boolean;
+  /** The tool call was cut off by the stop button (sealed by ADK). */
+  aborted?: boolean;
 }
 
 export interface ActivityGroup {
@@ -182,6 +187,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     {value: 'thinking', label: '思考', tooltip: '計画を立ててから検索し、思考プロセスを表示します'},
   ];
   thinkingMode: ThinkingMode = this.loadThinkingMode();
+  /** True while an agent response is streaming; swaps the send button for a stop button. */
+  isAgentResponding = signal(false);
+  private activeSseSubscription?: Subscription;
   currentSessionState = {};
   private hasInitializedAfterUserLoad = false;
   private readonly messagesSubject = new BehaviorSubject<any[]>([]);
@@ -348,6 +356,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     combineLatest([
       this.agentService.getLoadingState(), this.isModelThinkingSubject
     ]).subscribe(([isLoading, isModelThinking]) => {
+      this.isAgentResponding.set(isLoading);
       const lastMessage = this.messages[this.messages.length - 1];
 
       if (isLoading) {
@@ -522,6 +531,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.scrollInterruptedSubject.next(false);
 
     event.preventDefault();
+    if (this.isAgentResponding()) return;
     if (!this.userInput.trim() && this.selectedFiles.length <= 0) return;
 
     if (event instanceof KeyboardEvent) {
@@ -573,7 +583,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.streamingTextMessage = null;
     let sessionBriefRefreshQueued = false;
     const authRetryCount = options?.authRetryCount ?? 0;
-    this.agentService.runSse(req).subscribe({
+    const subscription: Subscription = this.agentService.runSse(req).subscribe({
       next: async (chunk) => {
         const chunkJson = JSON.parse(chunk);
         if (chunkJson.error) {
@@ -623,27 +633,69 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         }
         this.changeDetectorRef.detectChanges();
       },
-      error: (err) => console.error('SSE error:', err),
+      error: (err) => {
+        this.clearActiveSseSubscription(subscription);
+        console.error('SSE error:', err);
+      },
       complete: () => {
+        // An auth retry may already have started the next request; keep that one.
+        this.clearActiveSseSubscription(subscription);
         this.streamingTextMessage = null;
         if (sessionBriefRefreshQueued) {
           this.requestSessionBriefRefresh();
         }
-        this.eventService.getTrace(this.sessionId)
-            .pipe(catchError((error) => {
-              if (error.status === 404) {
-                return of(null);
-              }
-              return of([]);
-            }))
-            .subscribe(res => {
-              this.traceData = res;
-              this.changeDetectorRef.detectChanges();
-            });
-        this.traceService.setMessages(this.messages);
-        this.refreshSessionStateFromServer();
+        this.syncAfterAgentRun();
       },
     });
+    this.activeSseSubscription = subscription;
+  }
+
+  /** Stop button: abort the running response; the backend stops the agent run. */
+  stopAgentResponse() {
+    if (!this.abortActiveSse()) {
+      return;
+    }
+    this.isModelThinkingSubject.next(false);
+    this.streamingTextMessage = null;
+    this.insertMessageBeforeLoadingMessage(this.stoppedNoticeMessage());
+    this.changeDetectorRef.detectChanges();
+    this.syncAfterAgentRun();
+  }
+
+  private stoppedNoticeMessage() {
+    return {role: 'bot', text: '回答を停止しました。', stopped: true};
+  }
+
+  private abortActiveSse(): boolean {
+    if (!this.activeSseSubscription) {
+      return false;
+    }
+    this.activeSseSubscription.unsubscribe();
+    this.activeSseSubscription = undefined;
+    return true;
+  }
+
+  private clearActiveSseSubscription(subscription: Subscription) {
+    if (this.activeSseSubscription === subscription) {
+      this.activeSseSubscription = undefined;
+    }
+  }
+
+  /** Reload trace, messages for the trace view, and state after a run ends or is stopped. */
+  private syncAfterAgentRun() {
+    this.eventService.getTrace(this.sessionId)
+        .pipe(catchError((error) => {
+          if (error.status === 404) {
+            return of(null);
+          }
+          return of([]);
+        }))
+        .subscribe(res => {
+          this.traceData = res;
+          this.changeDetectorRef.detectChanges();
+        });
+    this.traceService.setMessages(this.messages);
+    this.refreshSessionStateFromServer();
   }
 
   private async startAsanaOAuthPopupAndWait(authUrlRaw: string): Promise<boolean> {
@@ -1338,6 +1390,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   clickEvent(i: number) {
     const key = this.messages[i].eventId;
+    // Client-side messages such as the stop notice have no event to show.
+    if (!key || !this.eventData.has(key)) {
+      return;
+    }
 
     this.sideDrawer.open();
     this.showSidePanel = true;
@@ -1377,6 +1433,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.abortActiveSse();
     this.webSocketService.closeConnection();
   }
 
@@ -1548,8 +1605,21 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.resetEventsAndMessages();
     let index = 0;
+    // A turn stopped with the stop button ends with ADK's INVOCATION_ABORTED
+    // events; show the same stop notice as when it was stopped live.
+    let abortedInvocationId: string | null = null;
+    const addStoppedNotice = () => {
+      if (abortedInvocationId) {
+        this.messages.push(this.stoppedNoticeMessage());
+        this.messagesSubject.next(this.messages);
+        abortedInvocationId = null;
+      }
+    };
 
     session.events.forEach((event: any) => {
+      if (abortedInvocationId && event.invocationId !== abortedInvocationId) {
+        addStoppedNotice();
+      }
       event.content?.parts?.forEach((part: any) => {
         if (part.text && this.isDelegatedSubAgentEvent(event)) {
           this.eventMessageIndexArray[index] = part.text;
@@ -1562,7 +1632,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           this.storeEvents(part, event, index);
         }
       });
+      if (event.errorCode === INVOCATION_ABORTED) {
+        abortedInvocationId = event.invocationId;
+      }
     });
+    addStoppedNotice();
 
     this.eventService.getTrace(this.sessionId).subscribe(res => {
       this.traceData = res;
@@ -1878,6 +1952,15 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     const response = message.functionResponse;
     const platform = AGENT_TOOL_LABELS[response?.name];
+    if (event?.errorCode === INVOCATION_ABORTED) {
+      return {
+        index,
+        kind: 'response',
+        label: platform ? `${platform} の検索を中止` : `${response?.name} を中止`,
+        nested,
+        aborted: true,
+      };
+    }
     return {
       index,
       kind: 'response',
@@ -1929,6 +2012,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   isActivityRunning(group: ActivityGroup): boolean {
     const after = this.messages.slice(group.end + 1);
     return after.length > 0 && after.every((message) => message.isLoading);
+  }
+
+  /** The user pressed stop while this group was running (live, or sealed by ADK on reload). */
+  isActivityStopped(group: ActivityGroup): boolean {
+    return !!this.messages[group.end + 1]?.stopped ||
+        group.steps.some((step) => step.aborted);
   }
 
   rollingActivitySteps(group: ActivityGroup): ActivityStep[] {

@@ -347,7 +347,9 @@
                     [attr.aria-expanded]="isActivityExpanded(group)"
                     (click)="toggleActivity(group)"
                   >
-                    @if (isActivityRunning(group)) {
+                    @if (isActivityStopped(group)) {
+                      <mat-icon class="activity-stopped-icon">stop_circle</mat-icon>
+                    } @else if (isActivityRunning(group)) {
                       <mat-progress-spinner
                         class="activity-spinner"
                         mode="indeterminate"
@@ -358,7 +360,7 @@
                       <mat-icon class="activity-done-icon">check_circle</mat-icon>
                     }
                     <span class="activity-header-text">
-                      {{ isActivityRunning(group) ? '処理中…' : group.summary }}
+                      {{ isActivityRunning(group) ? '処理中…' : group.summary }}{{ isActivityStopped(group) ? ' ・途中で停止' : '' }}
                     </span>
                     <mat-icon class="activity-chevron">expand_more</mat-icon>
                   </button>
@@ -372,7 +374,7 @@
                         >
                           <button type="button" class="activity-step-line" (click)="clickEvent(step.index)">
                             <mat-icon class="activity-step-icon">{{
-                              step.kind === 'thought' ? 'psychology' : step.kind === 'call' ? 'bolt' : 'check'
+                              step.aborted ? 'block' : step.kind === 'thought' ? 'psychology' : step.kind === 'call' ? 'bolt' : 'check'
                             }}</mat-icon>
                             <span class="activity-step-label">{{ step.label }}</span>
                             @if (step.detail) {
@@ -419,7 +421,7 @@
               @if (!message.functionCall && !message.functionResponse) {
                 <mat-card
                   class="message-card"
-                  [ngClass]="{ 'eval-fail': message.evalStatus === 2 }"
+                  [ngClass]="{ 'eval-fail': message.evalStatus === 2, 'stopped-message': message.stopped }"
                   [ngStyle]="{
                     'background-color': shouldMessageHighlighted(i) ? 'rgb(15, 82, 35)' : ''
                   }"
@@ -506,7 +508,7 @@
                             [data]="message.text"
                             [ngStyle]="{
                               'font-style': message.thought ? 'italic' : 'normal',
-                              color: message.thought ? '#9aa0a6' : 'white'
+                              color: message.thought || message.stopped ? '#9aa0a6' : 'white'
                             }"
                           ></markdown>
                         }
@@ -828,15 +830,27 @@
               </div>
               -->
 
-              <button
-                mat-mini-fab
-                color="primary"
-                class="send-button"
-                type="button"
-                aria-label="Send message"
-                (click)="sendMessage($event)">
-                <mat-icon>send</mat-icon>
-              </button>
+              @if (isAgentResponding()) {
+                <button
+                  mat-mini-fab
+                  class="send-button stop-button"
+                  type="button"
+                  aria-label="回答を停止"
+                  matTooltip="回答を停止"
+                  (click)="stopAgentResponse()">
+                  <mat-icon>stop</mat-icon>
+                </button>
+              } @else {
+                <button
+                  mat-mini-fab
+                  color="primary"
+                  class="send-button"
+                  type="button"
+                  aria-label="Send message"
+                  (click)="sendMessage($event)">
+                  <mat-icon>send</mat-icon>
+                </button>
+              }
             </div>
           </mat-form-field>
         </div>

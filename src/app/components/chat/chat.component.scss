@@ -393,6 +393,13 @@
   color: #81c995;
 }
 
+.activity-stopped-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  color: #9aa0a6;
+}
+
 .activity-header-text {
   flex: 1;
   min-width: 0;
@@ -544,6 +551,19 @@
 
 .send-button {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.stop-button {
+  background-color: #e3e3e3;
+  color: #202124;
+}
+
+.message-card.stopped-message {
+  background-color: transparent;
+  box-shadow: none;
+  border: 1px dashed #5f6368;
+  color: #9aa0a6;
+  font-size: 13px;
 }
 
 .fab-button {
