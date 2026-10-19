@@ -291,16 +291,255 @@
   }
 }
 
-.thinking-mode-toggle {
+.thinking-mode-switch {
+  --mode-pad: 3px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--mode-count), 1fr);
   align-self: center;
-  height: 32px;
-  align-items: center;
-  font-size: 13px;
+  padding: var(--mode-pad);
+  border: 1px solid #3c4043;
+  border-radius: 18px;
+  background-color: #202124;
 }
 
-:host ::ng-deep .thinking-mode-toggle .mat-button-toggle-label-content {
-  line-height: 30px;
-  padding: 0 12px;
+// Sliding pill behind the selected option.
+.thinking-mode-indicator {
+  position: absolute;
+  top: var(--mode-pad);
+  bottom: var(--mode-pad);
+  left: var(--mode-pad);
+  width: calc((100% - 2 * var(--mode-pad)) / var(--mode-count));
+  border-radius: 15px;
+  background-color: #8ab4f8;
+  transform: translateX(calc(var(--mode-index) * 100%));
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+// `.chat-input-actions button` adds side margins to every button; keep the options flush.
+.chat-input-actions .thinking-mode-option {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  min-width: 52px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 15px;
+  background: transparent;
+  color: #c4c7c5;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.28s ease;
+
+  &.active {
+    color: #202124;
+    font-weight: 500;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #8ab4f8;
+    outline-offset: 1px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-mode-indicator,
+  .chat-input-actions .thinking-mode-option {
+    transition: none;
+  }
+}
+
+// Activity panel: thoughts and tool calls of one turn, folded into one block.
+.activity-panel {
+  flex: 1;
+  min-width: 0;
+  max-width: 720px;
+  margin: 5px 0 5px 4px;
+  border: 1px solid #3c4043;
+  border-radius: 12px;
+  background-color: #1e1f20;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+
+  &.running {
+    border-color: #4a5a78;
+  }
+}
+
+.activity-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #c4c7c5;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.activity-done-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  color: #81c995;
+}
+
+.activity-header-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-chevron {
+  flex-shrink: 0;
+  color: #9aa0a6;
+  transition: transform 0.25s ease;
+
+  .expanded & {
+    transform: rotate(180deg);
+  }
+}
+
+// Rolling window: the latest steps, newest at the bottom, sliding up as they arrive.
+.activity-rolling {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 66px;
+  padding: 0 12px 8px 36px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 45%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 45%);
+}
+
+.activity-rolling-line {
+  display: flex;
+  gap: 8px;
+  min-height: 20px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #80868b;
+  white-space: nowrap;
+  overflow: hidden;
+  animation: activity-roll-in 0.3s ease-out;
+
+  &.current {
+    color: #e3e3e3;
+  }
+
+  &.nested {
+    padding-left: 14px;
+  }
+}
+
+@keyframes activity-roll-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.activity-steps {
+  margin: 0;
+  padding: 4px 12px 10px 12px;
+  list-style: none;
+  border-top: 1px solid #2d2f31;
+  animation: activity-expand 0.2s ease-out;
+}
+
+@keyframes activity-expand {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.activity-step {
+  &.nested {
+    padding-left: 22px;
+  }
+
+  &.highlighted .activity-step-line {
+    background-color: rgb(15, 82, 35);
+  }
+}
+
+.activity-step-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #e3e3e3;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.activity-step-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  color: #8ab4f8;
+}
+
+.activity-step-label {
+  flex-shrink: 0;
+}
+
+.activity-step-detail,
+.activity-rolling-line .activity-step-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #9aa0a6;
+}
+
+.activity-thought-text {
+  display: block;
+  margin: 2px 0 6px 30px;
+  font-size: 13px;
+  color: #9aa0a6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-rolling-line,
+  .activity-steps {
+    animation: none;
+  }
+
+  .activity-chevron {
+    transition: none;
+  }
 }
 
 .send-button {

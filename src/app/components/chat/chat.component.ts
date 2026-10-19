@@ -91,6 +91,39 @@ const BIDI_STREAMING_RESTART_WARNING =
 
 const THINKING_MODE_STORAGE_KEY = 'adk-web.thinkingMode';
 
+/** Display names for the root agent's platform tools (sub-agents). */
+const AGENT_TOOL_LABELS: Record<string, string> = {
+  sub_agent_slack: 'Slack',
+  sub_agent_gdrive: 'Google Drive',
+  sub_agent_asana: 'Asana',
+  sub_agent_backlog: 'Backlog',
+  sub_agent_github: 'GitHub',
+  sub_agent_glossary: '用語集',
+  sub_agent_google_search: 'Google 検索',
+};
+
+/** How many recent steps the collapsed activity panel keeps on screen. */
+const ACTIVITY_ROLLING_STEPS = 3;
+
+export interface ActivityStep {
+  /** Index of the message in `messages`, used to open the event detail. */
+  index: number;
+  kind: 'thought' | 'call' | 'response';
+  label: string;
+  detail?: string;
+  /** Thought text, shown in full when the panel is expanded. */
+  text?: string;
+  /** True for steps run inside a sub-agent (its own tool calls). */
+  nested: boolean;
+}
+
+export interface ActivityGroup {
+  start: number;
+  end: number;
+  steps: ActivityStep[];
+  summary: string;
+}
+
 @Component({
   selector: 'app-chat',
   templateUrl: './chat.component.html',
@@ -1761,10 +1794,166 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedFiles.splice(index, 1);
   }
 
+  private activityLayoutCache: {
+    messages: any[],
+    length: number,
+    first: any,
+    last: any,
+    groups: Map<number, ActivityGroup>,
+    hidden: Set<number>,
+  } | null = null;
+
+  /**
+   * Groups consecutive thoughts / tool calls / tool results into one activity
+   * panel, keyed by the index of the group's first message. The other messages
+   * of the group are hidden from the flat list.
+   */
+  private activityLayout() {
+    const messages = this.messages;
+    const cache = this.activityLayoutCache;
+    if (cache && cache.messages === messages && cache.length === messages.length &&
+        cache.first === messages[0] && cache.last === messages[messages.length - 1]) {
+      return cache;
+    }
+
+    const groups = new Map<number, ActivityGroup>();
+    const hidden = new Set<number>();
+    let current: ActivityGroup | null = null;
+    messages.forEach((message, i) => {
+      if (!this.isActivityMessage(message)) {
+        current = null;
+        return;
+      }
+      if (!current) {
+        current = {start: i, end: i, steps: [], summary: ''};
+        groups.set(i, current);
+      } else {
+        hidden.add(i);
+      }
+      current.end = i;
+      current.steps.push(this.toActivityStep(message, i));
+    });
+    groups.forEach((group) => group.summary = this.activitySummary(group));
+
+    this.activityLayoutCache = {
+      messages,
+      length: messages.length,
+      first: messages[0],
+      last: messages[messages.length - 1],
+      groups,
+      hidden,
+    };
+    return this.activityLayoutCache;
+  }
+
+  private isActivityMessage(message: any): boolean {
+    return message?.role === 'bot' &&
+        !!(message.thought || message.functionCall || message.functionResponse);
+  }
+
+  private toActivityStep(message: any, index: number): ActivityStep {
+    const event = this.eventData.get(message.eventId);
+    const nested = this.isDelegatedSubAgentEvent(event);
+    if (message.thought) {
+      return {
+        index,
+        kind: 'thought',
+        label: this.thoughtTitle(message.text) || '思考中',
+        text: message.text,
+        nested,
+      };
+    }
+    const call = message.functionCall;
+    if (call) {
+      const args = call.args ?? {};
+      const platform = AGENT_TOOL_LABELS[call.name];
+      if (platform) {
+        return {index, kind: 'call', label: `${platform} を検索`, detail: args.request, nested};
+      }
+      if (call.name === 'transfer_to_agent') {
+        const target = AGENT_TOOL_LABELS[args.agent_name] ?? args.agent_name;
+        return {index, kind: 'call', label: `${target} に切り替え`, nested};
+      }
+      return {index, kind: 'call', label: call.name, detail: this.compactArgs(args), nested};
+    }
+    const response = message.functionResponse;
+    const platform = AGENT_TOOL_LABELS[response?.name];
+    return {
+      index,
+      kind: 'response',
+      label: platform ? `${platform} の検索が完了` : `${response?.name} 完了`,
+      nested,
+    };
+  }
+
+  private compactArgs(args: any): string | undefined {
+    const text = JSON.stringify(args);
+    if (!text || text === '{}') {
+      return undefined;
+    }
+    return text.length > 120 ? `${text.slice(0, 117)}...` : text;
+  }
+
+  private activitySummary(group: ActivityGroup): string {
+    const platforms = [...new Set(group.steps
+        .filter((step) => step.kind === 'call' && !step.nested)
+        .map((step) => AGENT_TOOL_LABELS[this.messages[step.index]?.functionCall?.name])
+        .filter((label) => !!label))];
+    const stepCount = `${group.steps.length} ステップ`;
+    if (platforms.length > 0) {
+      return `${platforms.join('・')} を検索（${stepCount}）`;
+    }
+    if (group.steps.every((step) => step.kind === 'thought')) {
+      return `思考プロセス（${stepCount}）`;
+    }
+    return `処理内容（${stepCount}）`;
+  }
+
+  /** The activity group that starts at message `i`, if any. */
+  activityGroupAt(i: number): ActivityGroup | undefined {
+    if (this.isEvalEditMode()) {
+      return undefined;
+    }
+    return this.activityLayout().groups.get(i);
+  }
+
+  /** True for messages folded into an activity panel that starts earlier. */
+  isHiddenInActivity(i: number): boolean {
+    if (this.isEvalEditMode()) {
+      return false;
+    }
+    return this.activityLayout().hidden.has(i);
+  }
+
+  /** The agent is still working on this group: only the loading placeholder follows it. */
+  isActivityRunning(group: ActivityGroup): boolean {
+    const after = this.messages.slice(group.end + 1);
+    return after.length > 0 && after.every((message) => message.isLoading);
+  }
+
+  rollingActivitySteps(group: ActivityGroup): ActivityStep[] {
+    return group.steps.slice(-ACTIVITY_ROLLING_STEPS);
+  }
+
+  isActivityExpanded(group: ActivityGroup): boolean {
+    return !!this.messages[group.start]?.activityExpanded;
+  }
+
+  toggleActivity(group: ActivityGroup) {
+    const first = this.messages[group.start];
+    if (first) {
+      first.activityExpanded = !first.activityExpanded;
+    }
+  }
+
   /** First line of a thought summary (e.g. "**Planning the search**"), shown while collapsed. */
   thoughtTitle(text: string | undefined): string {
     const firstLine = (text ?? '').trim().split('\n')[0] ?? '';
     return firstLine.replace(/^\*\*(.+)\*\*$/, '$1').trim();
+  }
+
+  thinkingModeIndex(): number {
+    return Math.max(0, this.thinkingModeOptions.findIndex((option) => option.value === this.thinkingMode));
   }
 
   setThinkingMode(mode: ThinkingMode) {
