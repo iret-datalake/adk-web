@@ -120,12 +120,21 @@ export interface ActivityStep {
   nested: boolean;
   /** The tool call was cut off by the stop button (sealed by ADK). */
   aborted?: boolean;
+  /** A handoff to another agent (transfer_to_agent). */
+  transfer?: boolean;
+  /** Function call id, which is also the run id in the sub-agent's branch name. */
+  callId?: string;
+  /** For a root call to a sub-agent: the steps that sub-agent ran (its branch). */
+  children?: ActivityStep[];
 }
 
 export interface ActivityGroup {
   start: number;
   end: number;
+  /** All steps in order (rolling window, summary, stop state). */
   steps: ActivityStep[];
+  /** Steps for the expanded view: each sub-agent's steps nested under the call that started it. */
+  tree: ActivityStep[];
   summary: string;
 }
 
@@ -1899,7 +1908,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         return;
       }
       if (!current) {
-        current = {start: i, end: i, steps: [], summary: ''};
+        current = {start: i, end: i, steps: [], tree: [], summary: ''};
         groups.set(i, current);
       } else {
         hidden.add(i);
@@ -1907,7 +1916,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       current.end = i;
       current.steps.push(this.toActivityStep(message, i));
     });
-    groups.forEach((group) => group.summary = this.activitySummary(group));
+    groups.forEach((group) => {
+      group.tree = this.activityTree(group.steps);
+      group.summary = this.activitySummary(group);
+    });
 
     this.activityLayoutCache = {
       messages,
@@ -1918,6 +1930,52 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       hidden,
     };
     return this.activityLayoutCache;
+  }
+
+  /**
+   * Nests each sub-agent's steps under the root call that started it. A
+   * single_turn sub-agent runs in branch `<agent>@<function call id>`, so
+   * parallel searches no longer interleave in the expanded view.
+   */
+  private activityTree(steps: ActivityStep[]): ActivityStep[] {
+    const callsById = new Map<string, ActivityStep>();
+    const tree: ActivityStep[] = [];
+    for (const step of steps) {
+      const parent = step.nested ? callsById.get(this.branchRunId(step) ?? '') : undefined;
+      if (parent) {
+        parent.children = [...(parent.children ?? []), step];
+        continue;
+      }
+      if (step.kind === 'call' && step.callId && !step.nested) {
+        callsById.set(step.callId, step);
+      }
+      tree.push(step);
+    }
+    return tree;
+  }
+
+  /** The run id of the sub-agent branch a step ran in (the part after the last `@`). */
+  private branchRunId(step: ActivityStep): string | undefined {
+    const branch: string | undefined = this.eventData.get(this.messages[step.index]?.eventId)?.branch;
+    const segment = branch?.split('.').reverse().find((part) => part.includes('@'));
+    return segment?.slice(segment.lastIndexOf('@') + 1);
+  }
+
+  /** Display name of an agent: platform label for sub-agents, 'アシスタント' for the root. */
+  agentDisplayName(agentName: string | undefined): string {
+    if (!agentName) {
+      return '';
+    }
+    return AGENT_TOOL_LABELS[agentName] ??
+        (agentName === this.appName ? 'アシスタント' : agentName);
+  }
+
+  /** Label for answers written by an agent the root handed the chat over to. */
+  answeringAgentLabel(i: number): string | undefined {
+    if (this.messages[i]?.stopped) {
+      return undefined;
+    }
+    return AGENT_TOOL_LABELS[this.getAgentNameFromEvent(i)];
   }
 
   private isActivityMessage(message: any): boolean {
@@ -1940,17 +1998,27 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     const call = message.functionCall;
     if (call) {
       const args = call.args ?? {};
+      const callId = call.id;
       const platform = AGENT_TOOL_LABELS[call.name];
       if (platform) {
-        return {index, kind: 'call', label: `${platform} を検索`, detail: args.request, nested};
+        return {index, kind: 'call', label: `${platform} を検索`, detail: args.request, nested, callId};
       }
       if (call.name === 'transfer_to_agent') {
-        const target = AGENT_TOOL_LABELS[args.agent_name] ?? args.agent_name;
-        return {index, kind: 'call', label: `${target} に切り替え`, nested};
+        return {index, kind: 'call', label: `${this.agentDisplayName(args.agent_name)} に切り替え`, nested, callId};
       }
-      return {index, kind: 'call', label: call.name, detail: this.compactArgs(args), nested};
+      return {index, kind: 'call', label: call.name, detail: this.compactArgs(args), nested, callId};
     }
     const response = message.functionResponse;
+    const transferTarget = event?.actions?.transferToAgent;
+    if (transferTarget) {
+      return {
+        index,
+        kind: 'response',
+        label: `${this.agentDisplayName(event.author)} → ${this.agentDisplayName(transferTarget)}`,
+        nested,
+        transfer: true,
+      };
+    }
     const platform = AGENT_TOOL_LABELS[response?.name];
     if (event?.errorCode === INVOCATION_ABORTED) {
       return {
