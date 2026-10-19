@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+export type ThinkingMode = 'fast' | 'standard' | 'thinking';
+
 export interface AgentRunRequest {
   appName: string;
   userId: string;
@@ -22,4 +24,5 @@ export interface AgentRunRequest {
   newMessage: any;
   functionCallEventId?: string;
   streaming?: boolean;
+  thinkingMode?: ThinkingMode;
 }

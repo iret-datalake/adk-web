@@ -30,7 +30,7 @@ import {BehaviorSubject, catchError, combineLatest, distinctUntilChanged, finali
 import stc from 'string-to-color';
 
 import {URLUtil} from '../../../utils/url-util';
-import {AgentRunRequest} from '../../core/models/AgentRunRequest';
+import {AgentRunRequest, ThinkingMode} from '../../core/models/AgentRunRequest';
 import {Session} from '../../core/models/Session';
 import {User} from '../../core/models/User';
 import {AgentService} from '../../core/services/agent.service';
@@ -89,6 +89,8 @@ class CustomPaginatorIntl extends MatPaginatorIntl {
 const BIDI_STREAMING_RESTART_WARNING =
   'Restarting bidirectional streaming is not currently supported. Please refresh the page or start a new session.';
 
+const THINKING_MODE_STORAGE_KEY = 'adk-web.thinkingMode';
+
 @Component({
   selector: 'app-chat',
   templateUrl: './chat.component.html',
@@ -141,6 +143,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   redirectUri = URLUtil.getBaseUrlWithoutPath();
   showSidePanel = true;
   useSse = false;
+  readonly thinkingModeOptions: {value: ThinkingMode, label: string, tooltip: string}[] = [
+    {value: 'fast', label: '高速', tooltip: '思考を省略して素早く回答します'},
+    {value: 'standard', label: '標準', tooltip: '通常の回答モードです'},
+    {value: 'thinking', label: '思考', tooltip: '計画を立ててから検索し、思考プロセスを表示します'},
+  ];
+  thinkingMode: ThinkingMode = this.loadThinkingMode();
   currentSessionState = {};
   private hasInitializedAfterUserLoad = false;
   private readonly messagesSubject = new BehaviorSubject<any[]>([]);
@@ -515,6 +523,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         'parts': await this.getUserMessageParts(),
       },
       streaming: this.useSse,
+      thinkingMode: this.thinkingMode,
     };
     this.selectedFiles = [];
     this.runSseWithAuthRetry(req);
@@ -1750,6 +1759,33 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   removeFile(index: number) {
     URL.revokeObjectURL(this.selectedFiles[index].url);
     this.selectedFiles.splice(index, 1);
+  }
+
+  /** First line of a thought summary (e.g. "**Planning the search**"), shown while collapsed. */
+  thoughtTitle(text: string | undefined): string {
+    const firstLine = (text ?? '').trim().split('\n')[0] ?? '';
+    return firstLine.replace(/^\*\*(.+)\*\*$/, '$1').trim();
+  }
+
+  setThinkingMode(mode: ThinkingMode) {
+    this.thinkingMode = mode;
+    try {
+      localStorage.setItem(THINKING_MODE_STORAGE_KEY, mode);
+    } catch {
+      // Storage can be unavailable (e.g. private mode); the choice still applies to this page.
+    }
+  }
+
+  private loadThinkingMode(): ThinkingMode {
+    try {
+      const stored = localStorage.getItem(THINKING_MODE_STORAGE_KEY);
+      if (stored === 'fast' || stored === 'standard' || stored === 'thinking') {
+        return stored;
+      }
+    } catch {
+      // Fall back to the default below.
+    }
+    return 'standard';
   }
 
   toggleSse() {

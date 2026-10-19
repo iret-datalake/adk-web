@@ -368,10 +368,21 @@
                   }
                   <div>
                     @if (message.thought) {
-                      <div class="thought-chip">Thought</div>
+                      <button
+                        type="button"
+                        class="thought-toggle"
+                        [attr.aria-expanded]="!!message.thoughtExpanded"
+                        (click)="message.thoughtExpanded = !message.thoughtExpanded"
+                      >
+                        <mat-icon>{{ message.thoughtExpanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+                        <span class="thought-toggle-label">思考プロセス</span>
+                        @if (!message.thoughtExpanded && thoughtTitle(message.text)) {
+                          <span class="thought-toggle-title">{{ thoughtTitle(message.text) }}</span>
+                        }
+                      </button>
                     }
                     <div>
-                      @if (message.text) {
+                      @if (message.text && (!message.thought || message.thoughtExpanded)) {
                         @if (message.isEditing) {
                           <div class="edit-message-container">
                             <textarea
@@ -679,6 +690,19 @@
               style="caret-color: black"
             ></textarea>
             <div class="chat-input-actions">
+              <mat-button-toggle-group
+                class="thinking-mode-toggle"
+                aria-label="回答モード"
+                hideSingleSelectionIndicator
+                [value]="thinkingMode"
+                (change)="setThinkingMode($event.value)"
+              >
+                @for (option of thinkingModeOptions; track option.value) {
+                  <mat-button-toggle [value]="option.value" [matTooltip]="option.tooltip">
+                    {{ option.label }}
+                  </mat-button-toggle>
+                }
+              </mat-button-toggle-group>
               <!-- File upload is currently disabled; uncomment to enable -->
               <!--
               <button
