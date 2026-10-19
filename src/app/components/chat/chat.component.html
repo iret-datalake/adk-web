@@ -365,24 +365,37 @@
                     <mat-icon class="activity-chevron">expand_more</mat-icon>
                   </button>
                   @if (isActivityExpanded(group)) {
+                    <ng-template #activityStepLine let-step>
+                      <button type="button" class="activity-step-line" (click)="clickEvent(step.index)">
+                        <mat-icon class="activity-step-icon">{{
+                          step.aborted ? 'block' : step.transfer ? 'swap_horiz' : step.kind === 'thought' ? 'psychology' : step.kind === 'call' ? 'bolt' : 'check'
+                        }}</mat-icon>
+                        <span class="activity-step-label">{{ step.label }}</span>
+                        @if (step.detail) {
+                          <span class="activity-step-detail">{{ step.detail }}</span>
+                        }
+                      </button>
+                      @if (step.text) {
+                        <markdown class="activity-thought-text" [data]="step.text"></markdown>
+                      }
+                    </ng-template>
                     <ol class="activity-steps">
-                      @for (step of group.steps; track step.index) {
+                      @for (step of group.tree; track step.index) {
                         <li
                           class="activity-step"
                           [class.nested]="step.nested"
                           [class.highlighted]="shouldMessageHighlighted(step.index)"
                         >
-                          <button type="button" class="activity-step-line" (click)="clickEvent(step.index)">
-                            <mat-icon class="activity-step-icon">{{
-                              step.aborted ? 'block' : step.kind === 'thought' ? 'psychology' : step.kind === 'call' ? 'bolt' : 'check'
-                            }}</mat-icon>
-                            <span class="activity-step-label">{{ step.label }}</span>
-                            @if (step.detail) {
-                              <span class="activity-step-detail">{{ step.detail }}</span>
-                            }
-                          </button>
-                          @if (step.text) {
-                            <markdown class="activity-thought-text" [data]="step.text"></markdown>
+                          <ng-container *ngTemplateOutlet="activityStepLine; context: {$implicit: step}"></ng-container>
+                          @if (step.children?.length) {
+                            <!-- The sub-agent's own steps (its branch), grouped under the call that started it. -->
+                            <ol class="activity-substeps" [attr.aria-label]="step.label + ' の内部ステップ'">
+                              @for (child of step.children; track child.index) {
+                                <li class="activity-step" [class.highlighted]="shouldMessageHighlighted(child.index)">
+                                  <ng-container *ngTemplateOutlet="activityStepLine; context: {$implicit: child}"></ng-container>
+                                </li>
+                              }
+                            </ol>
                           }
                         </li>
                       }
@@ -442,6 +455,11 @@
                           }
                         </div>
                       }
+                    </div>
+                  }
+                  @if (answeringAgentLabel(i); as agentLabel) {
+                    <div class="answering-agent-chip">
+                      <mat-icon>swap_horiz</mat-icon>{{ agentLabel }}
                     </div>
                   }
                   <div>
@@ -508,7 +526,7 @@
                             [data]="message.text"
                             [ngStyle]="{
                               'font-style': message.thought ? 'italic' : 'normal',
-                              color: message.thought || message.stopped ? '#9aa0a6' : 'white'
+                              color: message.thought || message.stopped ? '#5f6368' : 'white'
                             }"
                           ></markdown>
                         }
