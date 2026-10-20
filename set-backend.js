@@ -25,10 +25,10 @@ if (!backendUrl) {
     process.exit(1);
 }
 
-const config = {
-    backendUrl
-};
+// Only the backend URL is replaced; other settings (e.g. logo) are kept.
+const current = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8')) : {};
+const config = { ...current, backendUrl };
 
-fs.writeFileSync(path, JSON.stringify(config, null, 2));
+fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
 
 console.log(`Backend URL injected: ${backendUrl}`);

@@ -26,6 +26,82 @@ html {
   ));
 }
 
+// Theme tokens for the app's own UI. Material components follow
+// `color-scheme`; ThemeService sets `data-theme` on <html>.
+:root {
+  --app-bg: #ffffff;
+  --app-surface: #f8f9fa;
+  --app-surface-variant: #f1f3f4;
+  --app-card: #ffffff;
+  --app-hover: rgba(0, 0, 0, 0.05);
+  --app-border: #dadce0;
+  --app-divider: #e0e0e0;
+  --app-text: #202124;
+  --app-text-secondary: #5f6368;
+  --app-text-tertiary: #80868b;
+  --app-accent: #1a73e8;
+  --app-on-accent: #ffffff;
+  --app-accent-soft: #e8f0fe;
+  --app-on-accent-soft: #1967d2;
+  --app-link: #1a73e8;
+  --app-success: #188038;
+  --app-success-soft: #e6f4ea;
+  --app-danger: #d93025;
+  --app-danger-soft: #fce8e6;
+  --app-running: #8ab4f8;
+  --app-user-bubble: #dcf8c6;
+  --app-bot-bubble: #eeeeee;
+  --app-code-bg: #ffffff;
+  --app-shadow: rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --app-bg: #131314;
+  --app-surface: #1e1f20;
+  --app-surface-variant: #282a2c;
+  --app-card: #282a2c;
+  --app-hover: rgba(255, 255, 255, 0.08);
+  --app-border: #444746;
+  --app-divider: #333537;
+  --app-text: #e3e3e3;
+  --app-text-secondary: #a8abaf;
+  --app-text-tertiary: #80868b;
+  --app-accent: #8ab4f8;
+  --app-on-accent: #062e6f;
+  --app-accent-soft: #1f3760;
+  --app-on-accent-soft: #a8c7fa;
+  --app-link: #8ab4f8;
+  --app-success: #81c995;
+  --app-success-soft: #1e3a2a;
+  --app-danger: #f28b82;
+  --app-danger-soft: #3c1f1e;
+  --app-running: #8ab4f8;
+  --app-user-bubble: #2a3f2c;
+  --app-bot-bubble: #282a2c;
+  --app-code-bg: #1e1f20;
+  --app-shadow: rgba(0, 0, 0, 0.6);
+  // ngx-json-viewer (event details) defaults to dark text.
+  --ngx-json-key: #e3e3e3;
+  --ngx-json-separator: #a8abaf;
+  --ngx-json-value: #e3e3e3;
+  --ngx-json-string: #81c995;
+  --ngx-json-number: #8ab4f8;
+  --ngx-json-boolean: #f28b82;
+  --ngx-json-object: #a8abaf;
+  --ngx-json-array: #a8abaf;
+  --ngx-json-toggler: #a8abaf;
+  --ngx-json-null: #e3e3e3;
+  --ngx-json-null-bg: #b3261e;
+  --ngx-json-undefined: #a8abaf;
+  --ngx-json-undefined-key: #a8abaf;
+}
+
+body {
+  background-color: var(--app-bg);
+  color: var(--app-text);
+}
+
 html {
   font-family: 'Google Sans', 'Helvetica Neue', sans-serif;
 } 
@@ -38,17 +114,25 @@ body {
 markdown p {
   margin-block-start: 0.5em;
   margin-block-end: 0.5em;
-  color: black !important;
+  color: inherit !important;
 }
 
 markdown {
-  color: black !important;
+  color: var(--app-text) !important;
+}
+
+markdown.muted-text {
+  color: var(--app-text-secondary) !important;
+}
+
+markdown a {
+  color: var(--app-link);
 }
 
 :root {
-  --mat-sys-primary: black;
+  --mat-sys-primary: light-dark(black, #e3e3e3);
   --mdc-checkbox-selected-icon-color: white;
-  --mat-sys-background: #131314;
+  --mat-sys-background: var(--app-bg);
   // tab variable overrides
   --mat-tab-header-active-label-text-color: #8AB4F8;
   --mat-tab-header-active-hover-label-text-color: #8AB4F8;
@@ -73,8 +157,8 @@ markdown {
 
 .light-dialog {
   .mat-mdc-dialog-surface {
-    background-color: #ffffff !important;
-    color: #202124;
+    background-color: var(--app-bg) !important;
+    color: var(--app-text);
   }
 
   .mat-mdc-dialog-title,
@@ -88,9 +172,9 @@ markdown pre {
   position: relative;
   // Room for the copy button in the top-right corner.
   padding: 10px 40px 10px 12px;
-  border: 1px solid #dadce0;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  background-color: #ffffff;
+  background-color: var(--app-code-bg);
   font-size: 13px;
 }
 
@@ -107,8 +191,8 @@ markdown pre {
   padding: 0;
   border: none;
   border-radius: 6px;
-  background-color: #e8eaed;
-  color: #5f6368;
+  background-color: var(--app-surface-variant);
+  color: var(--app-text-secondary);
   font-size: 16px;
   cursor: pointer;
   opacity: 0;
@@ -121,12 +205,12 @@ markdown pre {
   }
 
   &:hover {
-    background-color: #dadce0;
-    color: #202124;
+    background-color: var(--app-border);
+    color: var(--app-text);
   }
 
   &.copied {
-    color: #188038;
+    color: var(--app-success);
   }
 }
 
@@ -135,8 +219,9 @@ markdown pre {
   justify-content: center;
   margin: 8px 0;
   padding: 12px;
-  border: 1px solid #dadce0;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
+  // Diagrams are drawn for a light background, also in the dark theme.
   background-color: #ffffff;
 
   svg {
@@ -152,4 +237,39 @@ markdown img {
 
 .markdown-zoomable {
   cursor: zoom-in;
+}
+
+// Display settings (language / theme) in the toolbar menu.
+.settings-menu .settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 16px 12px;
+}
+
+.settings-menu .settings-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.settings-menu .settings-toggle {
+  .mat-button-toggle {
+    flex: 1;
+  }
+
+  .mat-button-toggle-label-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 14px;
+    font-size: 13px;
+  }
+
+  .mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
 }

@@ -40,7 +40,7 @@ import {DownloadService} from '../../core/services/download.service';
 import {EvalService} from '../../core/services/eval.service';
 import {EventService} from '../../core/services/event.service';
 import {FeatureFlagService} from '../../core/services/feature-flag.service';
-import {SessionService} from '../../core/services/session.service';
+import {FeedbackDirection, MessageFeedback, SessionService} from '../../core/services/session.service';
 import {UserService} from '../../core/services/user.service';
 import {TraceService} from '../../core/services/trace.service';
 import {VideoService} from '../../core/services/video.service';
@@ -55,6 +55,10 @@ import {PendingEventDialogComponent} from '../pending-event-dialog/pending-event
 import {DeleteSessionDialogComponent, DeleteSessionDialogData,} from '../session-tab/delete-session-dialog/delete-session-dialog.component';
 import {SessionTabComponent} from '../session-tab/session-tab.component';
 import {ViewImageDialogComponent} from '../view-image-dialog/view-image-dialog.component';
+import {I18nService} from '../../core/i18n/i18n.service';
+import {Language, MessageKey} from '../../core/i18n/messages';
+import {getLogoConfig} from '../../core/models/RuntimeConfig';
+import {ThemeService} from '../../core/services/theme.service';
 
 function fixBase64String(base64: string): string {
   // Replace URL-safe characters if they exist
@@ -92,18 +96,25 @@ const BIDI_STREAMING_RESTART_WARNING =
 const THINKING_MODE_STORAGE_KEY = 'adk-web.thinkingMode';
 
 /** Display names for the root agent's platform tools (sub-agents). */
-const AGENT_TOOL_LABELS: Record<string, string> = {
+const AGENT_TOOL_NAMES: Record<string, string> = {
   sub_agent_slack: 'Slack',
   sub_agent_gdrive: 'Google Drive',
   sub_agent_asana: 'Asana',
   sub_agent_backlog: 'Backlog',
   sub_agent_github: 'GitHub',
-  sub_agent_glossary: '用語集',
-  sub_agent_google_search: 'Google 検索',
+};
+
+/** Platform tools whose display name depends on the UI language. */
+const AGENT_TOOL_LABEL_KEYS: Record<string, MessageKey> = {
+  sub_agent_glossary: 'agent.glossary',
+  sub_agent_google_search: 'agent.googleSearch',
 };
 
 /** error_code ADK puts on the events that seal a run stopped by the client. */
 const INVOCATION_ABORTED = 'INVOCATION_ABORTED';
+
+/** Session state key the backend stores answer ratings under. */
+const MESSAGE_FEEDBACK_STATE_KEY = 'message_feedback';
 
 /** How many recent steps the collapsed activity panel keeps on screen. */
 const ACTIVITY_ROLLING_STEPS = 3;
@@ -190,14 +201,21 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   redirectUri = URLUtil.getBaseUrlWithoutPath();
   showSidePanel = true;
   useSse = false;
-  readonly thinkingModeOptions: {value: ThinkingMode, label: string, tooltip: string}[] = [
-    {value: 'fast', label: '高速', tooltip: '思考を省略して素早く回答します'},
-    {value: 'standard', label: '標準', tooltip: '通常の回答モードです'},
-    {value: 'thinking', label: '思考', tooltip: '計画を立ててから検索し、思考プロセスを表示します'},
+  readonly thinkingModeOptions: {value: ThinkingMode, label: MessageKey, tooltip: MessageKey}[] = [
+    {value: 'fast', label: 'mode.fast', tooltip: 'mode.fastTooltip'},
+    {value: 'standard', label: 'mode.standard', tooltip: 'mode.standardTooltip'},
+    {value: 'thinking', label: 'mode.thinking', tooltip: 'mode.thinkingTooltip'},
   ];
   thinkingMode: ThinkingMode = this.loadThinkingMode();
   /** True while an agent response is streaming; swaps the send button for a stop button. */
   isAgentResponding = signal(false);
+  readonly feedbackDirections: FeedbackDirection[] = ['up', 'down'];
+  /** The answer whose optional feedback comment box is open. */
+  feedbackCommentEventId: string | null = null;
+  feedbackNotice: {eventId: string, failed: boolean} | null = null;
+  private feedbackNoticeTimer?: ReturnType<typeof setTimeout>;
+  /** Ratings changed in this page, keyed `${sessionId}:${eventId}`; null = removed. */
+  private readonly feedbackOverrides = new Map<string, MessageFeedback | null>();
   private activeSseSubscription?: Subscription;
   currentSessionState = {};
   private hasInitializedAfterUserLoad = false;
@@ -241,6 +259,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly userService = inject(UserService);
+  protected readonly i18n = inject(I18nService);
+  protected readonly themeService = inject(ThemeService);
+  protected readonly logo = getLogoConfig();
 
   // Load apps
   private readonly agentService = inject(AgentService);
@@ -309,6 +330,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.document.title = this.logo.text;
     this.userService.userLoadError$.subscribe((error) => {
       this.userLoadingError.set(error);
     });
@@ -657,6 +679,86 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       },
     });
     this.activeSseSubscription = subscription;
+  }
+
+  /** The user's rating of an answer: changed here, or saved in the session state. */
+  feedbackFor(eventId: string): MessageFeedback | undefined {
+    const key = `${this.sessionId}:${eventId}`;
+    if (this.feedbackOverrides.has(key)) {
+      return this.feedbackOverrides.get(key) ?? undefined;
+    }
+    return (this.currentSessionState as any)?.[MESSAGE_FEEDBACK_STATE_KEY]?.[eventId];
+  }
+
+  /** Rating buttons go under the last text of each finished answer. */
+  showsFeedback(i: number): boolean {
+    const message = this.messages[i];
+    if (this.isEvalEditMode() || message?.role !== 'bot' || !message.text ||
+        !message.eventId || message.thought || message.stopped || message.isLoading ||
+        message.functionCall || message.functionResponse) {
+      return false;
+    }
+    const next = this.messages[i + 1];
+    if (next) {
+      return next.role !== 'bot';
+    }
+    return !this.isAgentResponding();
+  }
+
+  toggleFeedback(eventId: string, direction: FeedbackDirection) {
+    if (this.feedbackFor(eventId)?.direction === direction) {
+      this.feedbackCommentEventId = null;
+      this.saveFeedback(eventId, null);
+      return;
+    }
+    this.saveFeedback(eventId, {direction});
+    this.feedbackCommentEventId = eventId;
+    setTimeout(() => {
+      this.hostElementRef.nativeElement.querySelector('.feedback-comment')?.focus();
+    });
+  }
+
+  sendFeedbackComment(eventId: string, comment: string) {
+    const direction = this.feedbackFor(eventId)?.direction;
+    this.feedbackCommentEventId = null;
+    if (!direction) {
+      return;
+    }
+    this.saveFeedback(eventId, {direction, comment: comment.trim() || undefined}, true);
+  }
+
+  private saveFeedback(
+      eventId: string, feedback: MessageFeedback | null, showThanks = false) {
+    const key = `${this.sessionId}:${eventId}`;
+    this.feedbackOverrides.set(key, feedback);
+    const request: Observable<unknown> = feedback ?
+        this.sessionService.putMessageFeedback(
+            this.userId, this.appName, this.sessionId, eventId, feedback) :
+        this.sessionService.deleteMessageFeedback(
+            this.userId, this.appName, this.sessionId, eventId);
+    request.subscribe({
+      next: () => {
+        if (showThanks) {
+          this.showFeedbackNotice(eventId, false);
+        }
+      },
+      error: () => {
+        // Fall back to what the server has.
+        this.feedbackOverrides.delete(key);
+        this.feedbackCommentEventId = null;
+        this.showFeedbackNotice(eventId, true);
+      },
+    });
+  }
+
+  private showFeedbackNotice(eventId: string, failed: boolean) {
+    clearTimeout(this.feedbackNoticeTimer);
+    this.feedbackNotice = {eventId, failed};
+    this.feedbackNoticeTimer = setTimeout(() => {
+      this.feedbackNotice = null;
+      this.changeDetectorRef.markForCheck();
+    }, 3000);
+    this.changeDetectorRef.markForCheck();
   }
 
   /** Stop button: abort the running response; the backend stops the agent run. */
@@ -1879,6 +1981,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private activityLayoutCache: {
     messages: any[],
+    language: Language,
     length: number,
     first: any,
     last: any,
@@ -1893,8 +1996,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
    */
   private activityLayout() {
     const messages = this.messages;
+    const language = this.i18n.language();
     const cache = this.activityLayoutCache;
-    if (cache && cache.messages === messages && cache.length === messages.length &&
+    if (cache && cache.messages === messages && cache.language === language &&
+        cache.length === messages.length &&
         cache.first === messages[0] && cache.last === messages[messages.length - 1]) {
       return cache;
     }
@@ -1923,6 +2028,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.activityLayoutCache = {
       messages,
+      language,
       length: messages.length,
       first: messages[0],
       last: messages[messages.length - 1],
@@ -1961,13 +2067,22 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     return segment?.slice(segment.lastIndexOf('@') + 1);
   }
 
-  /** Display name of an agent: platform label for sub-agents, 'アシスタント' for the root. */
+  /** Display name of a platform tool (sub-agent), or undefined for other tools. */
+  private platformLabel(toolName: string | undefined): string | undefined {
+    if (!toolName) {
+      return undefined;
+    }
+    const key = AGENT_TOOL_LABEL_KEYS[toolName];
+    return key ? this.i18n.t(key) : AGENT_TOOL_NAMES[toolName];
+  }
+
+  /** Display name of an agent: platform label for sub-agents, "assistant" for the root. */
   agentDisplayName(agentName: string | undefined): string {
     if (!agentName) {
       return '';
     }
-    return AGENT_TOOL_LABELS[agentName] ??
-        (agentName === this.appName ? 'アシスタント' : agentName);
+    return this.platformLabel(agentName) ??
+        (agentName === this.appName ? this.i18n.t('agent.assistant') : agentName);
   }
 
   /** Label for answers written by an agent the root handed the chat over to. */
@@ -1975,7 +2090,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.messages[i]?.stopped) {
       return undefined;
     }
-    return AGENT_TOOL_LABELS[this.getAgentNameFromEvent(i)];
+    return this.platformLabel(this.getAgentNameFromEvent(i));
   }
 
   private isActivityMessage(message: any): boolean {
@@ -1990,7 +2105,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       return {
         index,
         kind: 'thought',
-        label: this.thoughtTitle(message.text) || '思考中',
+        label: this.thoughtTitle(message.text) || this.i18n.t('activity.thinking'),
         text: message.text,
         nested,
       };
@@ -1999,12 +2114,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     if (call) {
       const args = call.args ?? {};
       const callId = call.id;
-      const platform = AGENT_TOOL_LABELS[call.name];
+      const platform = this.platformLabel(call.name);
       if (platform) {
-        return {index, kind: 'call', label: `${platform} を検索`, detail: args.request, nested, callId};
+        return {index, kind: 'call', label: this.i18n.t('activity.search', {platform}), detail: args.request, nested, callId};
       }
       if (call.name === 'transfer_to_agent') {
-        return {index, kind: 'call', label: `${this.agentDisplayName(args.agent_name)} に切り替え`, nested, callId};
+        const agent = this.agentDisplayName(args.agent_name);
+        return {index, kind: 'call', label: this.i18n.t('activity.switch', {agent}), nested, callId};
       }
       return {index, kind: 'call', label: call.name, detail: this.compactArgs(args), nested, callId};
     }
@@ -2019,12 +2135,14 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         transfer: true,
       };
     }
-    const platform = AGENT_TOOL_LABELS[response?.name];
+    const platform = this.platformLabel(response?.name);
+    const name = response?.name;
     if (event?.errorCode === INVOCATION_ABORTED) {
       return {
         index,
         kind: 'response',
-        label: platform ? `${platform} の検索を中止` : `${response?.name} を中止`,
+        label: platform ? this.i18n.t('activity.searchAborted', {platform}) :
+                          this.i18n.t('activity.aborted', {name}),
         nested,
         aborted: true,
       };
@@ -2032,7 +2150,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     return {
       index,
       kind: 'response',
-      label: platform ? `${platform} の検索が完了` : `${response?.name} 完了`,
+      label: platform ? this.i18n.t('activity.searchDone', {platform}) :
+                        this.i18n.t('activity.done', {name}),
       nested,
     };
   }
@@ -2048,16 +2167,17 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private activitySummary(group: ActivityGroup): string {
     const platforms = [...new Set(group.steps
         .filter((step) => step.kind === 'call' && !step.nested)
-        .map((step) => AGENT_TOOL_LABELS[this.messages[step.index]?.functionCall?.name])
+        .map((step) => this.platformLabel(this.messages[step.index]?.functionCall?.name))
         .filter((label) => !!label))];
-    const stepCount = `${group.steps.length} ステップ`;
+    const steps = this.i18n.t('activity.steps', {count: group.steps.length});
     if (platforms.length > 0) {
-      return `${platforms.join('・')} を検索（${stepCount}）`;
+      const separator = this.i18n.t('activity.platformSeparator');
+      return this.i18n.t('activity.summarySearch', {platforms: platforms.join(separator), steps});
     }
     if (group.steps.every((step) => step.kind === 'thought')) {
-      return `思考プロセス（${stepCount}）`;
+      return this.i18n.t('activity.summaryThought', {steps});
     }
-    return `処理内容（${stepCount}）`;
+    return this.i18n.t('activity.summaryOther', {steps});
   }
 
   /** The activity group that starts at message `i`, if any. */

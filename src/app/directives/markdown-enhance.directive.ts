@@ -21,6 +21,7 @@ import {MarkdownComponent} from 'ngx-markdown';
 import {Subscription} from 'rxjs';
 
 import {ViewImageDialogComponent} from '../components/view-image-dialog/view-image-dialog.component';
+import {I18nService} from '../core/i18n/i18n.service';
 
 type Mermaid = typeof import('mermaid').default;
 
@@ -61,6 +62,7 @@ export class MarkdownEnhanceDirective implements OnInit, OnDestroy {
       private readonly markdown: MarkdownComponent,
       private readonly elementRef: ElementRef<HTMLElement>,
       private readonly dialog: MatDialog,
+      private readonly i18n: I18nService,
   ) {}
 
   ngOnInit() {
@@ -146,8 +148,8 @@ export class MarkdownEnhanceDirective implements OnInit, OnDestroy {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'markdown-copy-button material-symbols-outlined';
-    button.title = 'コピー';
-    button.setAttribute('aria-label', 'コピー');
+    button.title = this.i18n.t('markdown.copy');
+    button.setAttribute('aria-label', button.title);
     button.textContent = 'content_copy';
     button.addEventListener('click', async (event) => {
       event.stopPropagation();

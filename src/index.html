@@ -27,6 +27,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Mono:ital,wght@0,1..1000;1,1..1000&family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <script>
+    // Apply the saved theme before the app loads so dark mode does not flash white.
+    // ThemeService takes over after bootstrap.
+    try {
+      if (localStorage.getItem('adk-web.theme') === 'dark') {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <app-root></app-root>

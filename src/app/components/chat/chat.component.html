@@ -22,13 +22,13 @@
         position: absolute;
         width: 24px;
         height: 24px;
-        color: #5f6368;
+        color: var(--app-text-secondary);
         cursor: pointer;
         margin-left: 20px;
         margin-top: 20px;
         z-index: 9999;
       "
-      matTooltip="Open panel"
+      [matTooltip]="'drawer.openPanel' | t"
       (click)="toggleSidePanel()"
       >left_panel_open</span
     >
@@ -38,13 +38,13 @@
       <div style="width: 100%">
         <div class="drawer-header">
           <div class="drawer-logo">
-            <img src="assets/ADK-512-color.svg" width="32px" height="32px" />
-            Agent Development Kit
+            <img [src]="logo.imageUrl" width="32px" height="32px" alt="" />
+            {{ logo.text }}
           </div>
           <span
             class="material-symbols-outlined"
-            style="color: #5f6368; cursor: pointer; margin-right: 15px"
-            matTooltip="Collapse panel"
+            style="color: var(--app-text-secondary); cursor: pointer; margin-right: 15px"
+            [matTooltip]="'drawer.closePanel' | t"
             (click)="toggleSidePanel()"
             >left_panel_close</span
           >
@@ -55,7 +55,7 @@
       <mat-select
         class="app-select"
         (selectionChange)="onAppSelection($event)"
-        [placeholder]="isLoadingApps() ? 'Loading...' : 'Select an agent'"
+        [placeholder]="(isLoadingApps() ? 'drawer.loading' : 'drawer.selectAgent') | t"
         [formControl]="selectedAppControl"
       >
         @if (apps$ | async; as availableApps) {
@@ -73,7 +73,7 @@
         <mat-tab-group (selectedTabChange)="handleTabChange($event)">
           <mat-tab>
             <ng-template mat-tab-label>
-              <span class="tab-label">Sessions</span>
+              <span class="tab-label">{{ 'tab.sessions' | t }}</span>
             </ng-template>
             <app-session-tab
               [userId]="userId"
@@ -86,7 +86,7 @@
           </mat-tab>
           <mat-tab>
             <ng-template mat-tab-label>
-              <span class="tab-label">Contents</span>
+              <span class="tab-label">{{ 'tab.contents' | t }}</span>
             </ng-template>
             <app-state-tab
               [sessionState]="currentSessionState"
@@ -109,7 +109,7 @@
               [pageSize]="1"
               [pageIndex]="selectedEventIndex"
               (page)="handlePageEvent($event)"
-              aria-label="Select event"
+              [attr.aria-label]="'details.selectEvent' | t"
             >
             </mat-paginator>
             <button mat-mini-fab>
@@ -119,7 +119,7 @@
         </div>
         <div>
           <mat-tab-group>
-            <mat-tab label="Event">
+            <mat-tab [label]="'details.event' | t">
               <div class="event-graph-container">
                 @if (renderedEventGraph) {
                   <div
@@ -132,12 +132,12 @@
                 <ngx-json-viewer [json]="selectedEvent"></ngx-json-viewer>
               </div>
             </mat-tab>
-            <mat-tab label="Request">
+            <mat-tab [label]="'details.request' | t">
               <div class="json-viewer-container">
                 <ngx-json-viewer [json]="llmRequest"></ngx-json-viewer>
               </div>
             </mat-tab>
-            <mat-tab label="Response">
+            <mat-tab [label]="'details.response' | t">
               <div class="json-viewer-container">
                 <ngx-json-viewer [json]="llmResponse"></ngx-json-viewer>
               </div>
@@ -157,13 +157,13 @@
             style="
               width: 24px;
               height: 24px;
-              color: #5f6368;
+              color: var(--app-text-secondary);
               cursor: pointer;
               margin-left: 20px;
               margin-top: -2px;
               z-index: 9999;
             "
-            matTooltip="Open panel"
+            [matTooltip]="'drawer.openPanel' | t"
             (click)="toggleSidePanel()"
             >left_panel_open</span
           >
@@ -213,7 +213,7 @@
           </div>
         } @else {
           <div style="display: flex">
-            <div class="toolbar-session-text">Session ID</div>
+            <div class="toolbar-session-text">{{ 'toolbar.sessionId' | t }}</div>
             <div class="toolbar-session-id">{{ sessionId }}</div>
           </div>
           <div class="toolbar-actions">
@@ -233,29 +233,65 @@
             <div style="display: flex; align-items: center">
               <div (click)="onNewSessionClick()" class="toolbar-new-sesison">
                 <mat-icon>add</mat-icon>
-                New Session
+                {{ 'toolbar.newSession' | t }}
               </div>
               <span
                 class="material-symbols-outlined toolbar-icon"
-                matTooltip="Delete current session"
+                [matTooltip]="'toolbar.deleteSession' | t"
                 (click)="deleteSession(sessionId)"
               >
                 delete
               </span>
               <span
                 class="material-symbols-outlined toolbar-icon"
-                matTooltip="Export current session"
+                [matTooltip]="'toolbar.exportSession' | t"
                 (click)="exportSession()"
               >
                 download
               </span>
               @if (importSessionEnabledObs | async) {
                 <span class="material-symbols-outlined toolbar-icon"
-                  matTooltip="Import session"
+                  [matTooltip]="'toolbar.importSession' | t"
                   (click)="importSession()" >
                   upload
                 </span>
               }
+              <span
+                class="material-symbols-outlined toolbar-icon"
+                [matTooltip]="'settings.title' | t"
+                [matMenuTriggerFor]="settingsMenu"
+              >
+                settings
+              </span>
+              <mat-menu #settingsMenu="matMenu" class="settings-menu" xPosition="before">
+                <!-- Keeps the menu open while switching options. -->
+                <div class="settings-panel" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+                  <div class="settings-label">{{ 'settings.language' | t }}</div>
+                  <mat-button-toggle-group
+                    class="settings-toggle"
+                    [value]="i18n.language()"
+                    (change)="i18n.setLanguage($event.value)"
+                    hideSingleSelectionIndicator
+                  >
+                    <mat-button-toggle value="ja">日本語</mat-button-toggle>
+                    <mat-button-toggle value="en">English</mat-button-toggle>
+                  </mat-button-toggle-group>
+                  <div class="settings-label">{{ 'settings.theme' | t }}</div>
+                  <mat-button-toggle-group
+                    class="settings-toggle"
+                    [value]="themeService.theme()"
+                    (change)="themeService.setTheme($event.value)"
+                    hideSingleSelectionIndicator
+                  >
+                    <mat-button-toggle value="light">
+                      <mat-icon>light_mode</mat-icon>{{ 'settings.light' | t }}
+                    </mat-button-toggle>
+                    <mat-button-toggle value="dark">
+                      <mat-icon>dark_mode</mat-icon>{{ 'settings.dark' | t }}
+                    </mat-button-toggle>
+                  </mat-button-toggle-group>
+                </div>
+              </mat-menu>
               @if (userInitial) {
                 <div
                   class="toolbar-user-avatar"
@@ -275,40 +311,39 @@
       @if (!selectedAppControl.value) {
         @if (isLoadingApps()) {
           <div class="empty-state-container">
-            <span>Loading agents, please wait...</span>
+            <span>{{ 'empty.loadingAgents' | t }}</span>
           </div>
         } @else {
           <div class="empty-state-container">
             @if (((apps$ | async) || []).length > 0) {
               @if (isLoadingUser()) {
-                <span>loading user info........</span>
+                <span>{{ 'empty.loadingUser' | t }}</span>
               } @else {
                 @if (userLoadingError()) {
                   <div>
-                    Error message: <br />
+                    {{ 'empty.errorMessage' | t }} <br />
                     <pre class="error">{{ userLoadingError() }}</pre>
                   </div>
                 } @else {
                   <span>
-                    Welcome to ADK
+                    {{ 'empty.welcome' | t }}
                     @if (currentUser) {
                       , {{ currentUser.displayName || currentUser.id }}
                     }
-                    !<br />
-                    Select an agent on the left to begin.
+                    <br />
+                    {{ 'empty.selectAgent' | t }}
                   </span>
                 }
               }
             } @else {
               <div>
-                Failed to load agents. To get started, run
+                {{ 'empty.loadFailed' | t }}
                 <pre>adk web</pre>
-                in the folder that contains the agents.<br />
                 @if (loadingError()) {
-                  Error message: <br />
+                  {{ 'empty.errorMessage' | t }} <br />
                   <pre class="error">{{ loadingError() }}</pre>
                 } @else {
-                  <pre class="warning">Warning: No agents found in current folder.</pre>
+                  <pre class="warning">{{ 'empty.noAgents' | t }}</pre>
                 }
               </div>
             }
@@ -360,7 +395,7 @@
                       <mat-icon class="activity-done-icon">check_circle</mat-icon>
                     }
                     <span class="activity-header-text">
-                      {{ isActivityRunning(group) ? '処理中…' : group.summary }}{{ isActivityStopped(group) ? ' ・途中で停止' : '' }}
+                      {{ isActivityRunning(group) ? ('activity.running' | t) : group.summary }}{{ isActivityStopped(group) ? ('activity.stoppedSuffix' | t) : '' }}
                     </span>
                     <mat-icon class="activity-chevron">expand_more</mat-icon>
                   </button>
@@ -389,7 +424,7 @@
                           <ng-container *ngTemplateOutlet="activityStepLine; context: {$implicit: step}"></ng-container>
                           @if (step.children?.length) {
                             <!-- The sub-agent's own steps (its branch), grouped under the call that started it. -->
-                            <ol class="activity-substeps" [attr.aria-label]="step.label + ' の内部ステップ'">
+                            <ol class="activity-substeps" [attr.aria-label]="'activity.substeps' | t: {label: step.label}">
                               @for (child of step.children; track child.index) {
                                 <li class="activity-step" [class.highlighted]="shouldMessageHighlighted(child.index)">
                                   <ng-container *ngTemplateOutlet="activityStepLine; context: {$implicit: child}"></ng-container>
@@ -471,7 +506,7 @@
                         (click)="message.thoughtExpanded = !message.thoughtExpanded"
                       >
                         <mat-icon>{{ message.thoughtExpanded ? 'expand_less' : 'expand_more' }}</mat-icon>
-                        <span class="thought-toggle-label">思考プロセス</span>
+                        <span class="thought-toggle-label">{{ 'thought.label' | t }}</span>
                         @if (!message.thoughtExpanded && thoughtTitle(message.text)) {
                           <span class="thought-toggle-title">{{ thoughtTitle(message.text) }}</span>
                         }
@@ -524,11 +559,9 @@
                           <markdown
                             appMarkdownEnhance
                             class="message-text"
-                            [data]="message.text"
-                            [ngStyle]="{
-                              'font-style': message.thought ? 'italic' : 'normal',
-                              color: message.thought || message.stopped ? '#5f6368' : 'white'
-                            }"
+                            [data]="message.stopped ? ('chat.stopped' | t) : message.text"
+                            [class.muted-text]="message.thought || message.stopped"
+                            [style.font-style]="message.thought ? 'italic' : 'normal'"
                           ></markdown>
                         }
                       }
@@ -754,6 +787,45 @@
                 </button>
               }
             </div>
+            @if (showsFeedback(i)) {
+              <div class="feedback-bar">
+                @for (direction of feedbackDirections; track direction) {
+                  <button
+                    type="button"
+                    class="feedback-button"
+                    [class.selected]="feedbackFor(message.eventId)?.direction === direction"
+                    [attr.aria-pressed]="feedbackFor(message.eventId)?.direction === direction"
+                    [matTooltip]="(direction === 'up' ? 'feedback.good' : 'feedback.bad') | t"
+                    (click)="toggleFeedback(message.eventId, direction)"
+                  >
+                    <mat-icon fontSet="material-symbols-outlined">{{
+                      direction === 'up' ? 'thumb_up' : 'thumb_down'
+                    }}</mat-icon>
+                  </button>
+                }
+                @if (feedbackCommentEventId === message.eventId) {
+                  <input
+                    #feedbackCommentInput
+                    class="feedback-comment"
+                    maxlength="2000"
+                    [placeholder]="'feedback.commentPlaceholder' | t"
+                    (keydown.enter)="sendFeedbackComment(message.eventId, feedbackCommentInput.value)"
+                    (keydown.escape)="feedbackCommentEventId = null"
+                  />
+                  <button
+                    type="button"
+                    class="feedback-send"
+                    (click)="sendFeedbackComment(message.eventId, feedbackCommentInput.value)"
+                  >
+                    {{ 'feedback.send' | t }}
+                  </button>
+                } @else if (feedbackNotice?.eventId === message.eventId) {
+                  <span class="feedback-notice" [class.error]="feedbackNotice?.failed">{{
+                    (feedbackNotice?.failed ? 'feedback.failed' : 'feedback.thanks') | t
+                  }}</span>
+                }
+              </div>
+            }
             }
             }
           }
@@ -798,14 +870,14 @@
               cdkAutosizeMaxRows="10"
               [(ngModel)]="userInput"
               (keydown.enter)="sendMessage($event)"
-              placeholder="Type a Message..."
+              [placeholder]="'chat.placeholder' | t"
               style="caret-color: black"
             ></textarea>
             <div class="chat-input-actions">
               <div
                 class="thinking-mode-switch"
                 role="radiogroup"
-                aria-label="回答モード"
+                [attr.aria-label]="'chat.mode' | t"
                 [style.--mode-index]="thinkingModeIndex()"
                 [style.--mode-count]="thinkingModeOptions.length"
               >
@@ -817,10 +889,10 @@
                     class="thinking-mode-option"
                     [class.active]="thinkingMode === option.value"
                     [attr.aria-checked]="thinkingMode === option.value"
-                    [matTooltip]="option.tooltip"
+                    [matTooltip]="option.tooltip | t"
                     (click)="setThinkingMode(option.value)"
                   >
-                    {{ option.label }}
+                    {{ option.label | t }}
                   </button>
                 }
               </div>
@@ -830,7 +902,7 @@
                 mat-icon-button
                 (click)="fileInput.click()"
                 class="function-event-button"
-                matTooltip="Upload local file"
+                [matTooltip]="'chat.uploadFile' | t"
               >
                 <mat-icon>attach_file</mat-icon>
               </button>
@@ -867,8 +939,8 @@
                   mat-mini-fab
                   class="send-button stop-button"
                   type="button"
-                  aria-label="回答を停止"
-                  matTooltip="回答を停止"
+                  [attr.aria-label]="'chat.stop' | t"
+                  [matTooltip]="'chat.stop' | t"
                   (click)="stopAgentResponse()">
                   <mat-icon>stop</mat-icon>
                 </button>
@@ -878,7 +950,7 @@
                   color="primary"
                   class="send-button"
                   type="button"
-                  aria-label="Send message"
+                  [attr.aria-label]="'chat.send' | t"
                   (click)="sendMessage($event)">
                   <mat-icon>send</mat-icon>
                 </button>

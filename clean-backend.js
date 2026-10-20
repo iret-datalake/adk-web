@@ -18,7 +18,9 @@ const fs = require('fs');
 const path = './src/assets/config/runtime-config.json';
 
 if (fs.existsSync(path)) {
-    fs.writeFileSync(path, JSON.stringify({ backendUrl: '' }, null, 2));
+    // Only the backend URL is reset; other settings (e.g. logo) are kept.
+    const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+    fs.writeFileSync(path, JSON.stringify({ ...config, backendUrl: '' }, null, 2) + '\n');
     console.log('Cleaned runtime-config.json');
 } else {
     console.log('runtime-config.json does not exist. Nothing to clean.');

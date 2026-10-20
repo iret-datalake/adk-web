@@ -24,7 +24,7 @@
 
 .drawer-container {
   height: 100%;
-  background-color: #ffffff;
+  background-color: var(--app-bg);
 }
 
 .generated-image-container {
@@ -56,7 +56,7 @@
 }
 
 .event-container {
-  color: #333333;
+  color: var(--app-text);
 }
 
 .html-artifact-container {
@@ -75,7 +75,7 @@
   .mat-icon {
     width: 36px;
     height: 36px;
-    color: #5f6368;
+    color: var(--app-text-secondary);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -90,7 +90,7 @@
   flex: 1;
   min-height: 12%;
   box-shadow: none;
-  background-color: #ffffff;
+  background-color: var(--app-bg);
 }
 
 .loading-bar {
@@ -117,7 +117,7 @@
 }
 
 .function-event-button {
-  background-color: #f0f0f0;
+  background-color: var(--app-surface-variant);
   margin: 5px 5px 10px;
 }
 
@@ -132,9 +132,9 @@
   justify-content: flex-end;
   align-items: center;
   .message-card {
-    background-color: #dcf8c6;
+    background-color: var(--app-user-bubble);
     align-self: flex-end;
-    color: #000000;
+    color: var(--app-text);
     box-shadow: none;
   }
 }
@@ -143,29 +143,29 @@
   display: flex;
   align-items: center;
   .message-card {
-    background-color: #eeeeee;
+    background-color: var(--app-bot-bubble);
     align-self: flex-start;
-    color: #000000;
+    color: var(--app-text);
     box-shadow: none;
   }
 }
 
 .bot-message:focus-within {
   .message-card {
-    background-color: #ffffff;
-    border: 1px solid #007bff;
+    background-color: var(--app-bg);
+    border: 1px solid var(--app-accent);
   }
 }
 
 .message-textarea {
-  background-color: #f0f0f0;
+  background-color: var(--app-surface-variant);
   max-width: 100%;
   border: none;
   font-family: 'Google Sans', 'Helvetica Neue', sans-serif;
 }
 
 .message-textarea:focus {
-  background-color: #ffffff;
+  background-color: var(--app-bg);
   outline: none;
 }
 
@@ -270,19 +270,19 @@
   flex-grow: 1;
 
   textarea {
-    color: #000000;
+    color: var(--app-text);
     border: none;
     padding: 10px;
     box-sizing: content-box;
 
     &::placeholder {
-      color: #8e918f;
+      color: var(--app-text-tertiary);
     }
   }
 
   button {
-    color: #000000;
-    background-color: #e0e0e0;
+    color: var(--app-text);
+    background-color: var(--app-surface-variant);
   }
 }
 
@@ -306,9 +306,9 @@
   grid-template-columns: repeat(var(--mode-count), 1fr);
   align-self: center;
   padding: var(--mode-pad);
-  border: 1px solid #dadce0;
+  border: 1px solid var(--app-border);
   border-radius: 18px;
-  background-color: #f1f3f4;
+  background-color: var(--app-surface-variant);
 }
 
 // Sliding pill behind the selected option.
@@ -319,7 +319,7 @@
   left: var(--mode-pad);
   width: calc((100% - 2 * var(--mode-pad)) / var(--mode-count));
   border-radius: 15px;
-  background-color: #1a73e8;
+  background-color: var(--app-accent);
   transform: translateX(calc(var(--mode-index) * 100%));
   transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -334,19 +334,19 @@
   border: none;
   border-radius: 15px;
   background: transparent;
-  color: #5f6368;
+  color: var(--app-text-secondary);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
   transition: color 0.28s ease;
 
   &.active {
-    color: #ffffff;
+    color: var(--app-on-accent);
     font-weight: 500;
   }
 
   &:focus-visible {
-    outline: 2px solid #1a73e8;
+    outline: 2px solid var(--app-accent);
     outline-offset: 1px;
   }
 }
@@ -366,14 +366,14 @@
   min-width: 0;
   max-width: min(720px, calc(100% - 72px));
   margin: 5px 16px 5px 4px;
-  border: 1px solid #dadce0;
+  border: 1px solid var(--app-border);
   border-radius: 12px;
-  background-color: #f8f9fa;
+  background-color: var(--app-surface);
   overflow: hidden;
   transition: border-color 0.2s ease;
 
   &.running {
-    border-color: #8ab4f8;
+    border-color: var(--app-running);
   }
 }
 
@@ -388,14 +388,14 @@
   padding: 8px 10px 8px 12px;
   border: none;
   background: transparent;
-  color: #3c4043;
+  color: var(--app-text);
   font: inherit;
   font-size: 13px;
   text-align: left;
   cursor: pointer;
 
   &:hover {
-    background-color: rgba(0, 0, 0, 0.04);
+    background-color: var(--app-hover);
   }
 }
 
@@ -403,14 +403,14 @@
   font-size: 16px;
   width: 16px;
   height: 16px;
-  color: #188038;
+  color: var(--app-success);
 }
 
 .activity-stopped-icon {
   font-size: 16px;
   width: 16px;
   height: 16px;
-  color: #5f6368;
+  color: var(--app-text-secondary);
 }
 
 .activity-header-text {
@@ -424,7 +424,7 @@
 .activity-chevron {
   flex-shrink: 0;
   margin-left: 4px;
-  color: #5f6368;
+  color: var(--app-text-secondary);
   transition: transform 0.25s ease;
 
   .expanded & {
@@ -448,7 +448,7 @@
   min-height: 20px;
   font-size: 13px;
   line-height: 20px;
-  color: #80868b;
+  color: var(--app-text-tertiary);
   opacity: 0.6;
   white-space: nowrap;
   overflow: hidden;
@@ -459,7 +459,7 @@
   }
 
   &.current {
-    color: #202124;
+    color: var(--app-text);
     opacity: 1;
   }
 
@@ -483,7 +483,7 @@
   margin: 0;
   padding: 4px 12px 10px 12px;
   list-style: none;
-  border-top: 1px solid #e8eaed;
+  border-top: 1px solid var(--app-divider);
   animation: activity-expand 0.2s ease-out;
 }
 
@@ -505,12 +505,17 @@
     padding-left: 22px;
   }
 
-  &.highlighted // A sub-agent's own steps, under the call that started it.
+  &.highlighted .activity-step-line {
+    background-color: var(--app-success-soft);
+  }
+}
+
+// A sub-agent's own steps, under the call that started it.
 .activity-substeps {
   margin: 0 0 2px 13px;
   padding: 0 0 0 10px;
   list-style: none;
-  border-left: 1px solid #dadce0;
+  border-left: 1px solid var(--app-border);
 }
 
 .answering-agent-chip {
@@ -520,19 +525,14 @@
   margin-bottom: 4px;
   padding: 1px 8px 1px 4px;
   border-radius: 10px;
-  background-color: #e8f0fe;
-  color: #1967d2;
+  background-color: var(--app-accent-soft);
+  color: var(--app-on-accent-soft);
   font-size: 12px;
 
   mat-icon {
     font-size: 14px;
     width: 14px;
     height: 14px;
-  }
-}
-
-.activity-step-line {
-    background-color: #e6f4ea;
   }
 }
 
@@ -548,14 +548,14 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #202124;
+  color: var(--app-text);
   font: inherit;
   font-size: 13px;
   text-align: left;
   cursor: pointer;
 
   &:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--app-hover);
   }
 }
 
@@ -564,7 +564,7 @@
   font-size: 16px;
   width: 16px;
   height: 16px;
-  color: #1a73e8;
+  color: var(--app-accent);
 }
 
 .activity-step-label {
@@ -577,14 +577,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #5f6368;
+  color: var(--app-text-secondary);
 }
 
 .activity-thought-text {
   display: block;
   margin: 2px 0 6px 30px;
   font-size: 13px;
-  color: #5f6368;
+  color: var(--app-text-secondary);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -599,19 +599,19 @@
 }
 
 .send-button {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 6px var(--app-shadow);
 }
 
 .stop-button {
-  background-color: #e3e3e3;
-  color: #202124;
+  background-color: var(--app-surface-variant);
+  color: var(--app-text);
 }
 
 .message-card.stopped-message {
   background-color: transparent;
   box-shadow: none;
-  border: 1px dashed #bdc1c6;
-  color: #5f6368;
+  border: 1px dashed var(--app-border);
+  color: var(--app-text-secondary);
   font-size: 13px;
 }
 
@@ -629,8 +629,8 @@
 }
 
 .side-drawer {
-  background-color: #fafafa;
-  color: #333333;
+  background-color: var(--app-surface);
+  color: var(--app-text);
   border-radius: 0;
 }
 
@@ -655,7 +655,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  background: #eee;
+  background: var(--app-surface-variant);
   padding: 5px;
   border-radius: 4px;
 }
@@ -687,7 +687,7 @@ button {
 }
 
 .empty-state-container {
-  color: #333333;
+  color: var(--app-text);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -705,7 +705,7 @@ button {
   }
 
   pre.error {
-    color: #ff0000;
+    color: var(--app-danger);
   }
 }
 
@@ -723,7 +723,7 @@ button {
 }
 
 :host ::ng-deep .mdc-linear-progress__buffer-dots {
-  background: #cccccc;
+  background: var(--app-border);
 }
 
 :host ::ng-deep .mat-mdc-select-arrow-wrapper {
@@ -731,11 +731,11 @@ button {
 }
 
 :host ::ng-deep .mat-mdc-text-field-wrapper {
-  border: 1px solid #cccccc;
+  border: 1px solid var(--app-border);
 }
 
 :host ::ng-deep .input-field .mat-mdc-text-field-wrapper {
-  border: 1px solid #cccccc;
+  border: 1px solid var(--app-border);
   border-radius: 16px;
 }
 
@@ -750,13 +750,13 @@ button {
 }
 
 :host ::ng-deep .segment-key {
-  color: #555555 !important;
+  color: var(--app-text-secondary) !important;
 }
 
 :host ::ng-deep .mat-mdc-mini-fab {
-  background-color: #f0f0f0;
+  background-color: var(--app-surface-variant);
   mat-icon {
-    color: #333333;
+    color: var(--app-text);
   }
 }
 
@@ -765,7 +765,7 @@ button {
 }
 
 .resize-handler {
-  background: #cccccc;
+  background: var(--app-border);
   width: 4px;
   border-radius: 4px;
   position: absolute;
@@ -778,7 +778,7 @@ button {
 }
 
 .bottom-resize-handler {
-  background: #cccccc;
+  background: var(--app-border);
   height: 5px;
   border-radius: 4px;
   position: absolute;
@@ -793,7 +793,7 @@ button {
 
 .trace-detail-container {
   position: relative;
-  background-color: #fafafa;
+  background-color: var(--app-surface);
 
   app-trace-event {
     padding-top: 8px;
@@ -811,7 +811,7 @@ button {
 .app-select-container {
   width: 30%;
   margin-top: 12px;
-  background-color: #f0f0f0;
+  background-color: var(--app-surface-variant);
   margin-left: 20px;
   height: 30px;
   display: flex;
@@ -825,9 +825,9 @@ button {
 .app-select-container {
   @include mat.select-overrides(
     (
-      placeholder-text-color: #007bff,
-      enabled-trigger-text-color: #007bff,
-      enabled-arrow-color: #007bff,
+      placeholder-text-color: var(--app-link),
+      enabled-trigger-text-color: var(--app-link),
+      enabled-arrow-color: var(--app-link),
     )
   );
 }
@@ -855,7 +855,7 @@ button {
   left: 0;
   right: 0;
   bottom: 0;
-  background: #f5f5f5;
+  background: var(--app-surface);
   display: inline-block;
   justify-content: center;
   align-items: center;
@@ -863,7 +863,7 @@ button {
 }
 
 .details-content {
-  color: #333333;
+  color: var(--app-text);
   font-size: 14px;
 }
 
@@ -891,11 +891,11 @@ button {
   position: sticky;
   top: 0;
   height: 48px;
-  background: #ffffff;
+  background: var(--app-bg);
   display: flex;
   align-items: center;
   z-index: 10;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--app-divider);
 }
 
 .chat-toolbar.edit-mode {
@@ -914,7 +914,7 @@ button {
 }
 
 .toolbar-session-text {
-  color: #333333;
+  color: var(--app-text);
   font-family: Roboto;
   font-size: 12px;
   font-style: normal;
@@ -927,7 +927,7 @@ button {
 }
 
 .toolbar-session-id {
-  color: #5f6368;
+  color: var(--app-text-secondary);
   font-family: 'Google Sans Mono', monospace;
   font-size: 14px;
   font-style: normal;
@@ -940,7 +940,7 @@ button {
 .toolbar-icon {
   width: 24px;
   height: 24px;
-  color: #5f6368;
+  color: var(--app-text-secondary);
   cursor: pointer;
   margin-right: 16px;
 }
@@ -948,7 +948,7 @@ button {
 .toolbar-new-sesison {
   font-size: 14px;
   margin-right: 16px;
-  color: #5f6368;
+  color: var(--app-text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1014,7 +1014,7 @@ button {
   border-radius: 50%;
   padding: 8px;
   cursor: pointer;
-  color: #333333;
+  color: var(--app-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1032,7 +1032,7 @@ button {
   flex-direction: column;
   gap: 8px;
   height: 80px;
-  background-color: #f5f5f5;
+  background-color: var(--app-surface);
   border-radius: 12px;
 }
 
@@ -1051,16 +1051,16 @@ button {
   max-width: 100%;
   margin-top: 5px;
   padding: 2px 10px 2px 4px;
-  border: 1px solid #dadce0;
+  border: 1px solid var(--app-border);
   border-radius: 16px;
   background: transparent;
-  color: #5f6368;
+  color: var(--app-text-secondary);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
 
   &:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--app-hover);
   }
 
   mat-icon {
@@ -1072,7 +1072,7 @@ button {
 
 .thought-toggle-label {
   flex-shrink: 0;
-  color: #1a73e8;
+  color: var(--app-accent);
 }
 
 .thought-toggle-title {
@@ -1114,7 +1114,7 @@ button {
   border: none;
   padding: 0;
   font: inherit;
-  color: #007bff !important;
+  color: var(--app-link) !important;
   text-decoration: underline;
   cursor: pointer;
   outline: none;
@@ -1142,13 +1142,96 @@ button {
 }
 
 ::ng-deep .mat-drawer {
-  border-right: 1px solid #e0e0e0 !important;
+  border-right: 1px solid var(--app-divider) !important;
 }
 
 .app-name-option,
 .app-select {
-  color: #5f6368;
+  color: var(--app-text-secondary);
   font-family: 'Google Sans Mono', monospace;
   font-style: normal;
   font-weight: 400;
+}
+
+// 👍 / 👎 under the last text of an answer, aligned with the message card.
+.feedback-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 32px;
+  margin: -2px 0 6px 85px;
+}
+
+.feedback-button {
+  // The component-wide `button` rule adds 20px side margins.
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--app-text-tertiary);
+  cursor: pointer;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+
+  &:hover {
+    background-color: var(--app-hover);
+    color: var(--app-text-secondary);
+  }
+
+  &.selected {
+    color: var(--app-accent);
+
+    mat-icon {
+      font-variation-settings: 'FILL' 1;
+    }
+  }
+}
+
+.feedback-comment {
+  width: min(320px, 50vw);
+  margin-left: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background-color: var(--app-bg);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+
+  &:focus {
+    border-color: var(--app-accent);
+  }
+}
+
+.feedback-send {
+  margin: 0 0 0 6px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 14px;
+  background-color: var(--app-accent);
+  color: var(--app-on-accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.feedback-notice {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+
+  &.error {
+    color: var(--app-danger);
+  }
 }
