@@ -350,17 +350,12 @@
           </div>
         }
       }
-      @if (longRunningEvents.length > 0) {
-        <button mat-fab color="primary" class="fab-button" (click)="openDialog()">
-          <mat-icon>priority_high</mat-icon>
-        </button>
-      }
       @if (appName != "") {
         <div #autoScroll class="chat-messages">
           <div #videoContainer></div>
           @for (message of messages; track message; let i = $index) {
             <!-- Messages folded into an activity panel are rendered by the group's first message. -->
-            @if (!isHiddenInActivity(i)) {
+            @if (!isHiddenInActivity(i) && !isHitlResponseMessage(message)) {
             @if (activityGroupAt(i); as group) {
               <div class="bot-message">
                 <button
@@ -714,15 +709,26 @@
                 </mat-card>
               }
               @if (message.functionCall) {
-                <button
-                  mat-stroked-button
-                  [ngClass]="{'function-event-button-highlight': shouldMessageHighlighted(i)}"
-                  class="function-event-button"
-                  (click)="clickEvent(i)"
-                >
-                  <mat-icon>bolt</mat-icon>
-                  {{ message.functionCall.name }}
-                </button>
+                @if (hitlRequestAt(i); as hitl) {
+                  <app-hitl-request
+                    [request]="hitl"
+                    [resolution]="hitlResolution(hitl)"
+                    [expired]="isHitlExpired(i, hitl)"
+                    [disabled]="isAgentResponding()"
+                    [interimResponse]="hitlInterimResponse(hitl)"
+                    (respond)="respondToHitl(hitl, $event)"
+                  ></app-hitl-request>
+                } @else {
+                  <button
+                    mat-stroked-button
+                    [ngClass]="{'function-event-button-highlight': shouldMessageHighlighted(i)}"
+                    class="function-event-button"
+                    (click)="clickEvent(i)"
+                  >
+                    <mat-icon>bolt</mat-icon>
+                    {{ message.functionCall.name }}
+                  </button>
+                }
               }
               @if (message.functionResponse) {
                 <button
