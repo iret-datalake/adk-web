@@ -60,8 +60,8 @@ import {NewEvalSetDialogComponentComponent} from './eval-tab/new-eval-set-dialog
 import {RunEvalConfigDialogComponent} from './eval-tab/run-eval-config-dialog/run-eval-config-dialog.component';
 import {EventTabComponent} from './event-tab/event-tab.component';
 import {TraceChartComponent} from './event-tab/trace-chart/trace-chart.component';
+import {HitlRequestComponent} from './hitl-request/hitl-request.component';
 import {JsonEditorComponent} from './json-editor/json-editor.component';
-import {PendingEventDialogComponent} from './pending-event-dialog/pending-event-dialog.component';
 import {DeleteSessionDialogComponent} from './session-tab/delete-session-dialog/delete-session-dialog.component';
 import {SessionTabComponent} from './session-tab/session-tab.component';
 import {StateTabComponent} from './state-tab/state-tab.component';
@@ -72,7 +72,6 @@ import {ViewImageDialogComponent} from './view-image-dialog/view-image-dialog.co
 
 const COMPONENTS = [
   ChatComponent,
-  PendingEventDialogComponent,
   EventTabComponent,
   SessionTabComponent,
   EvalTabComponent,
@@ -94,6 +93,7 @@ const COMPONENTS = [
   TraceTreeComponent,
   TraceEventComponent,
   JsonEditorComponent,
+  HitlRequestComponent,
 ];
 
 @NgModule({

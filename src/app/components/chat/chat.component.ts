@@ -51,13 +51,14 @@ import {AudioPlayerComponent} from '../audio-player/audio-player.component';
 import {EditFunctionArgsDialogComponent} from '../eval-tab/edit-function-args-dialog/edit-function-args-dialog.component';
 import {EvalCase, EvalTabComponent} from '../eval-tab/eval-tab.component';
 import {EventTabComponent} from '../event-tab/event-tab.component';
-import {PendingEventDialogComponent} from '../pending-event-dialog/pending-event-dialog.component';
 import {DeleteSessionDialogComponent, DeleteSessionDialogData,} from '../session-tab/delete-session-dialog/delete-session-dialog.component';
 import {SessionTabComponent} from '../session-tab/session-tab.component';
 import {ViewImageDialogComponent} from '../view-image-dialog/view-image-dialog.component';
 import {I18nService} from '../../core/i18n/i18n.service';
 import {Language, MessageKey} from '../../core/i18n/messages';
+import {APPROVAL_REQUESTED_ERROR, getHitlRequest, HitlRequest, REJECTED_ERROR} from '../../core/models/Hitl';
 import {getLogoConfig} from '../../core/models/RuntimeConfig';
+import {HitlResolution} from '../hitl-request/hitl-request.component';
 import {ThemeService} from '../../core/services/theme.service';
 
 function fixBase64String(base64: string): string {
@@ -216,6 +217,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private feedbackNoticeTimer?: ReturnType<typeof setTimeout>;
   /** Ratings changed in this page, keyed `${sessionId}:${eventId}`; null = removed. */
   private readonly feedbackOverrides = new Map<string, MessageFeedback | null>();
+  /** HITL requests by call id, and the answers sent from this page. */
+  private readonly hitlRequests = new Map<string, HitlRequest>();
+  private readonly hitlAnswers = new Map<string, HitlResolution>();
   private activeSseSubscription?: Subscription;
   currentSessionState = {};
   private hasInitializedAfterUserLoad = false;
@@ -1451,32 +1455,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.refreshSessionStateFromServer();
   }
 
-  openDialog(): void {
-    const dialogRef = this.dialog.open(PendingEventDialogComponent, {
-      width: '600px',
-      data: {
-        event: this.longRunningEvents[0],
-        appName: this.appName,
-        userId: this.userId,
-        sessionId: this.sessionId,
-        functionCallEventId: this.functionCallEventId,
-      },
-    });
-
-    dialogRef.afterClosed().subscribe((t) => {
-      if (t) {
-        this.removeFinishedLongRunningEvents(t.events);
-        this.processRunSseResponse(t.response);
-      }
-    });
-  }
-
-  removeFinishedLongRunningEvents(finishedEvents: any[]) {
-    const idsToExclude = new Set(finishedEvents.map((obj: any) => obj.id));
-    this.longRunningEvents =
-      this.longRunningEvents.filter(obj => !idsToExclude.has(obj.id));
-  }
-
   getAgentNameFromEvent(i: number) {
     const key = this.messages[i].eventId;
     const selectedEvent = this.eventData.get(key);
@@ -2094,8 +2072,96 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private isActivityMessage(message: any): boolean {
-    return message?.role === 'bot' &&
+    // Requests waiting on the user get their own card instead.
+    return message?.role === 'bot' && !this.hitlRequestOf(message) &&
         !!(message.thought || message.functionCall || message.functionResponse);
+  }
+
+  /** The approval / input / manual result the call at message `i` waits for. */
+  hitlRequestAt(i: number): HitlRequest | null {
+    const message = this.messages[i];
+    return message?.role === 'bot' ? this.hitlRequestOf(message) : null;
+  }
+
+  private hitlRequestOf(message: any): HitlRequest | null {
+    const call = message?.functionCall;
+    if (!call?.id) {
+      return null;
+    }
+    // Cached so the card keeps the same input (and its form state) across checks.
+    const cached = this.hitlRequests.get(call.id);
+    if (cached) {
+      return cached;
+    }
+    const request = getHitlRequest(
+        call, this.eventData.get(message.eventId)?.longRunningToolIds);
+    if (request) {
+      this.hitlRequests.set(call.id, request);
+    }
+    return request;
+  }
+
+  /** The user's function responses are shown on the request card, not as messages. */
+  isHitlResponseMessage(message: any): boolean {
+    return message?.role === 'user' && !!message.functionResponse;
+  }
+
+  hitlResolution(request: HitlRequest): HitlResolution | null {
+    const answered = this.hitlAnswers.get(request.callId);
+    if (answered) {
+      return answered;
+    }
+    const message = this.messages.find((m) =>
+        m.role === 'user' && m.functionResponse?.id === request.callId);
+    if (!message) {
+      return null;
+    }
+    const response = message.functionResponse.response ?? {};
+    const resolution = {confirmed: response.confirmed, response};
+    this.hitlAnswers.set(request.callId, resolution);
+    return resolution;
+  }
+
+  /** The user moved on (sent a new message) without answering the request. */
+  isHitlExpired(i: number, request: HitlRequest): boolean {
+    return !this.hitlResolution(request) &&
+        this.messages.slice(i + 1).some((m) => m.role === 'user' && m.text);
+  }
+
+  /** What a long-running tool returned so far, to start the manual result from. */
+  hitlInterimResponse(request: HitlRequest): unknown {
+    return this.messages.find((m) =>
+        m.role === 'bot' && m.functionResponse?.id === request.callId)
+        ?.functionResponse.response;
+  }
+
+  respondToHitl(request: HitlRequest, response: Record<string, unknown>) {
+    if (this.isAgentResponding()) {
+      return;
+    }
+    this.hitlAnswers.set(request.callId, {
+      confirmed: response['confirmed'] as boolean | undefined,
+      response,
+    });
+    this.scrollInterruptedSubject.next(false);
+    const req: AgentRunRequest = {
+      appName: this.appName,
+      userId: this.userId,
+      sessionId: this.sessionId,
+      newMessage: {
+        role: 'user',
+        parts: [{
+          function_response: {
+            id: request.callId,
+            name: request.callName,
+            response,
+          },
+        }],
+      },
+      streaming: this.useSse,
+      thinkingMode: this.thinkingMode,
+    };
+    this.runSseWithAuthRetry(req);
   }
 
   private toActivityStep(message: any, index: number): ActivityStep {
@@ -2125,6 +2191,18 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       return {index, kind: 'call', label: call.name, detail: this.compactArgs(args), nested, callId};
     }
     const response = message.functionResponse;
+    const error = response?.response?.error;
+    if (error === APPROVAL_REQUESTED_ERROR || error === REJECTED_ERROR) {
+      return {
+        index,
+        kind: 'response',
+        label: this.i18n.t(
+            error === REJECTED_ERROR ? 'activity.rejectedCall' : 'activity.awaitingApproval',
+            {name: this.platformLabel(response.name) ?? response.name}),
+        nested,
+        aborted: error === REJECTED_ERROR,
+      };
+    }
     const transferTarget = event?.actions?.transferToAgent;
     if (transferTarget) {
       return {
