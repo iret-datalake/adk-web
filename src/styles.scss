@@ -253,6 +253,20 @@ markdown img {
   color: var(--app-text-secondary);
 }
 
+.settings-menu .settings-dev-mode {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.settings-menu .settings-hint {
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+}
+
+.usage-tooltip {
+  white-space: pre-line;
+}
+
 .settings-menu .settings-toggle {
   .mat-button-toggle {
     flex: 1;

@@ -59,6 +59,8 @@ import {Language, MessageKey} from '../../core/i18n/messages';
 import {APPROVAL_REQUESTED_ERROR, getHitlRequest, HitlRequest, REJECTED_ERROR} from '../../core/models/Hitl';
 import {getLogoConfig} from '../../core/models/RuntimeConfig';
 import {HitlResolution} from '../hitl-request/hitl-request.component';
+import {InstructionDiffDialogComponent} from '../instruction-diff-dialog/instruction-diff-dialog.component';
+import {DevModeService} from '../../core/services/dev-mode.service';
 import {ThemeService} from '../../core/services/theme.service';
 
 function fixBase64String(base64: string): string {
@@ -116,6 +118,28 @@ const INVOCATION_ABORTED = 'INVOCATION_ABORTED';
 
 /** Session state key the backend stores answer ratings under. */
 const MESSAGE_FEEDBACK_STATE_KEY = 'message_feedback';
+
+/** The system instruction of an LLM request (a string or a Content). */
+function systemInstructionText(request: any): string | null {
+  const instruction = request?.config?.system_instruction ?? request?.config?.systemInstruction;
+  if (typeof instruction === 'string') {
+    return instruction;
+  }
+  if (instruction?.parts) {
+    return instruction.parts.map((part: any) => part.text ?? '').join('\n');
+  }
+  return null;
+}
+
+/** Token counts summed over LLM calls (from the events' usage_metadata). */
+interface TokenUsage {
+  prompt: number;
+  cached: number;
+  output: number;
+  thoughts: number;
+  total: number;
+  calls: number;
+}
 
 /** How an agent or tool took part in a turn, in the flow diagram. */
 type FlowState = 'done' | 'running' | 'aborted';
@@ -220,6 +244,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private feedbackNoticeTimer?: ReturnType<typeof setTimeout>;
   /** Ratings changed in this page, keyed `${sessionId}:${eventId}`; null = removed. */
   private readonly feedbackOverrides = new Map<string, MessageFeedback | null>();
+  private tokenUsageCache: {events: Map<string, any> | null, byInvocation: Map<string, TokenUsage | null>} =
+      {events: null, byInvocation: new Map()};
   /** HITL requests by call id, and the answers sent from this page. */
   private readonly hitlRequests = new Map<string, HitlRequest>();
   private readonly hitlAnswers = new Map<string, HitlResolution>();
@@ -228,6 +254,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly activityFlowCache = new Map<string, {svg: string, html: SafeHtml}>();
   private activeSseSubscription?: Subscription;
   currentSessionState = {};
+  /** Every event of the session as stored (also state-only ones), for the developer tabs. */
+  sessionEvents: any[] = [];
   private hasInitializedAfterUserLoad = false;
   private readonly messagesSubject = new BehaviorSubject<any[]>([]);
   private readonly streamingTextMessageSubject =
@@ -250,6 +278,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   llmRequest: any = undefined;
   llmResponse: any = undefined;
   llmRequestKey = 'gcp.vertex.agent.llm_request';
+  /** The selected event's system instruction and the same agent's previous one (null: first call). */
+  systemInstructionDiff: {agent: string, current: string, previous: string | null} | null = null;
   llmResponseKey = 'gcp.vertex.agent.llm_response';
 
   getMediaTypeFromMimetype = getMediaTypeFromMimetype;
@@ -271,6 +301,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly userService = inject(UserService);
   protected readonly i18n = inject(I18nService);
   protected readonly themeService = inject(ThemeService);
+  protected readonly devMode = inject(DevModeService);
   protected readonly logo = getLogoConfig();
 
   // Load apps
@@ -427,9 +458,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     this.traceService.selectedTraceRow$.subscribe(node => {
-      const eventId = node?.attributes['gcp.vertex.agent.event_id']
+      const eventId = node?.attributes?.['gcp.vertex.agent.event_id'];
       if (eventId && this.eventData.has(eventId)) {
         this.bottomPanelVisible = true;
+        // Trace tab: open the clicked span's event.
+        this.openEventDetails(eventId);
       } else {
         this.bottomPanelVisible = false;
       }
@@ -549,6 +582,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sessionService.createSession(this.userId, this.appName)
       .subscribe((res) => {
         this.currentSessionState = res.state;
+        this.sessionEvents = [];
         this.sessionId = res.id;
         this.sessionTab.refreshSession();
 
@@ -769,6 +803,104 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       this.changeDetectorRef.markForCheck();
     }, 3000);
     this.changeDetectorRef.markForCheck();
+  }
+
+  /**
+   * Compares the system instruction of the selected event's LLM call with the
+   * same agent's previous call (from their traces).
+   */
+  private compareSystemInstruction(event: any, request: any) {
+    const current = systemInstructionText(request);
+    if (current === null) {
+      return;
+    }
+    const events = [...this.eventData.values()];
+    const index = events.findIndex((candidate) => candidate.id === event.id);
+    const previous = events.slice(0, Math.max(0, index)).reverse().find(
+        (candidate) => candidate.author === event.author && candidate.usageMetadata);
+    if (!previous) {
+      this.systemInstructionDiff = {agent: event.author, current, previous: null};
+      return;
+    }
+    this.eventService.getEventTrace(previous.id).subscribe({
+      next: (res) => {
+        if (this.selectedEvent?.id !== event.id) {
+          return;
+        }
+        let previousText: string | null = null;
+        try {
+          previousText = systemInstructionText(JSON.parse(res[this.llmRequestKey]));
+        } catch {}
+        this.systemInstructionDiff = previousText === null ? null :
+            {agent: event.author, current, previous: previousText};
+        this.changeDetectorRef.markForCheck();
+      },
+      // The previous call's trace is gone (e.g. the server restarted).
+      error: () => {},
+    });
+  }
+
+  openInstructionDiff() {
+    const diff = this.systemInstructionDiff;
+    if (diff?.previous == null) {
+      return;
+    }
+    this.dialog.open(InstructionDiffDialogComponent, {
+      width: '900px',
+      maxWidth: '95vw',
+      panelClass: 'light-dialog',
+      data: {agent: diff.agent, previous: diff.previous, current: diff.current},
+    });
+  }
+
+  invocationOf(eventId: string | undefined): string | undefined {
+    return eventId ? this.eventData.get(eventId)?.invocationId : undefined;
+  }
+
+  /**
+   * Token usage of the LLM calls in one turn (an invocation, including its
+   * sub-agents' calls) or, without an id, in the whole session.
+   */
+  tokenUsage(invocationId?: string): TokenUsage | null {
+    if (this.tokenUsageCache.events !== this.eventData) {
+      this.tokenUsageCache = {events: this.eventData, byInvocation: new Map()};
+    }
+    const key = invocationId ?? '';
+    const cached = this.tokenUsageCache.byInvocation.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const usage: TokenUsage = {prompt: 0, cached: 0, output: 0, thoughts: 0, total: 0, calls: 0};
+    for (const event of this.eventData.values()) {
+      const metadata = event.usageMetadata;
+      if (!metadata || (invocationId && event.invocationId !== invocationId)) {
+        continue;
+      }
+      usage.prompt += metadata.promptTokenCount ?? 0;
+      usage.cached += metadata.cachedContentTokenCount ?? 0;
+      usage.output += metadata.candidatesTokenCount ?? 0;
+      usage.thoughts += metadata.thoughtsTokenCount ?? 0;
+      usage.total += metadata.totalTokenCount ?? 0;
+      usage.calls += 1;
+    }
+    const result = usage.calls ? usage : null;
+    this.tokenUsageCache.byInvocation.set(key, result);
+    return result;
+  }
+
+  usageTooltip(usage: TokenUsage): string {
+    return this.i18n.t('usage.tooltip', {
+      prompt: this.formatTokens(usage.prompt),
+      cached: this.formatTokens(usage.cached),
+      output: this.formatTokens(usage.output),
+      thoughts: this.formatTokens(usage.thoughts),
+      total: this.formatTokens(usage.total),
+      calls: usage.calls,
+    });
+  }
+
+  formatTokens(count: number): string {
+    return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
   }
 
   /** Stop button: abort the running response; the backend stops the agent run. */
@@ -1484,7 +1616,14 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   clickEvent(i: number) {
-    const key = this.messages[i].eventId;
+    this.openEventDetails(this.messages[i]?.eventId);
+  }
+
+  /**
+   * Opens the event detail panel. Also for events not shown as a message
+   * (e.g. a sub-agent's own text), as opened from the trace / state tabs.
+   */
+  openEventDetails(key: string | undefined) {
     // Client-side messages such as the stop notice have no event to show.
     if (!key || !this.eventData.has(key)) {
       return;
@@ -1495,9 +1634,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedEvent = this.eventData.get(key);
     this.selectedEventIndex = this.getIndexOfKeyInMap(key);
 
+    this.systemInstructionDiff = null;
+    const selected = this.selectedEvent;
     this.eventService.getEventTrace(this.selectedEvent.id).subscribe((res) => {
       this.llmRequest = JSON.parse(res[this.llmRequestKey]);
       this.llmResponse = JSON.parse(res[this.llmResponseKey]);
+      this.compareSystemInstruction(selected, this.llmRequest);
     });
 
     this.eventService
@@ -1689,6 +1831,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.traceService.resetTraceService();
     this.sessionId = session.id;
     this.currentSessionState = session.state;
+    this.sessionEvents = session.events ?? [];
     this.evalCase = null;
     this.isChatMode.set(true);
 
@@ -2514,9 +2657,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   selectEvent(key: string) {
     this.selectedEvent = this.eventData.get(key);
     this.selectedEventIndex = this.getIndexOfKeyInMap(key);
+    this.systemInstructionDiff = null;
+    const selected = this.selectedEvent;
     this.eventService.getEventTrace(this.selectedEvent.id).subscribe((res) => {
       this.llmRequest = JSON.parse(res[this.llmRequestKey]);
       this.llmResponse = JSON.parse(res[this.llmResponseKey]);
+      this.compareSystemInstruction(selected, this.llmRequest);
     });
     this.eventService
       .getEvent(
@@ -2715,6 +2861,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
               return;
             }
             this.currentSessionState = session.state ?? {};
+            this.sessionEvents = session.events ?? [];
             this.changeDetectorRef.detectChanges();
           },
           error: (error) => {

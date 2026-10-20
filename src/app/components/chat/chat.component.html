@@ -96,6 +96,23 @@
               (sessionStateChange)="onSessionStateChanged($event)"
             ></app-state-tab>
           </mat-tab>
+          @if (devMode.enabled()) {
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <span class="tab-label">{{ 'tab.stateHistory' | t }}</span>
+              </ng-template>
+              <app-state-history
+                [events]="sessionEvents"
+                (eventSelected)="openEventDetails($event)"
+              ></app-state-history>
+            </mat-tab>
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <span class="tab-label">{{ 'tab.trace' | t }}</span>
+              </ng-template>
+              <app-trace-tab [traceData]="traceData"></app-trace-tab>
+            </mat-tab>
+          }
         </mat-tab-group>
       </div>
     }
@@ -133,6 +150,21 @@
               </div>
             </mat-tab>
             <mat-tab [label]="'details.request' | t">
+              @if (systemInstructionDiff; as diff) {
+                <div class="instruction-diff-bar" [class.changed]="diff.previous !== null && diff.previous !== diff.current">
+                  <mat-icon>description</mat-icon>
+                  @if (diff.previous === null) {
+                    <span>{{ 'sid.first' | t }}</span>
+                  } @else if (diff.previous !== diff.current) {
+                    <span>{{ 'sid.changed' | t }}</span>
+                    <button type="button" class="instruction-diff-button" (click)="openInstructionDiff()">
+                      {{ 'sid.showDiff' | t }}
+                    </button>
+                  } @else {
+                    <span>{{ 'sid.unchanged' | t }}</span>
+                  }
+                </div>
+              }
               <div class="json-viewer-container">
                 <ngx-json-viewer [json]="llmRequest"></ngx-json-viewer>
               </div>
@@ -215,6 +247,15 @@
           <div style="display: flex">
             <div class="toolbar-session-text">{{ 'toolbar.sessionId' | t }}</div>
             <div class="toolbar-session-id">{{ sessionId }}</div>
+            @if (devMode.enabled() && tokenUsage(); as usage) {
+              <span
+                class="usage-chip toolbar-usage"
+                matTooltipClass="usage-tooltip"
+                [matTooltip]="('usage.session' | t: {total: formatTokens(usage.total)}) + '\n' + usageTooltip(usage)"
+              >
+                <mat-icon>toll</mat-icon>{{ formatTokens(usage.total) }}
+              </span>
+            }
           </div>
           <div class="toolbar-actions">
             <!-- <div class="toolbar-sse-toggle">
@@ -290,6 +331,14 @@
                       <mat-icon>dark_mode</mat-icon>{{ 'settings.dark' | t }}
                     </mat-button-toggle>
                   </mat-button-toggle-group>
+                  <mat-slide-toggle
+                    class="settings-dev-mode"
+                    [checked]="devMode.enabled()"
+                    (change)="devMode.setEnabled($event.checked)"
+                  >
+                    {{ 'settings.devMode' | t }}
+                  </mat-slide-toggle>
+                  <div class="settings-hint">{{ 'settings.devModeHint' | t }}</div>
                 </div>
               </mat-menu>
               @if (userInitial) {
@@ -818,6 +867,15 @@
             </div>
             @if (showsFeedback(i)) {
               <div class="feedback-bar">
+                @if (devMode.enabled() && tokenUsage(invocationOf(message.eventId)); as usage) {
+                  <span
+                    class="usage-chip"
+                    matTooltipClass="usage-tooltip"
+                    [matTooltip]="usageTooltip(usage)"
+                  >
+                    <mat-icon>toll</mat-icon>{{ formatTokens(usage.total) }}
+                  </span>
+                }
                 @for (direction of feedbackDirections; track direction) {
                   <button
                     type="button"

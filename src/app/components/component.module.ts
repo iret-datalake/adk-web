@@ -61,9 +61,11 @@ import {RunEvalConfigDialogComponent} from './eval-tab/run-eval-config-dialog/ru
 import {EventTabComponent} from './event-tab/event-tab.component';
 import {TraceChartComponent} from './event-tab/trace-chart/trace-chart.component';
 import {HitlRequestComponent} from './hitl-request/hitl-request.component';
+import {InstructionDiffDialogComponent} from './instruction-diff-dialog/instruction-diff-dialog.component';
 import {JsonEditorComponent} from './json-editor/json-editor.component';
 import {DeleteSessionDialogComponent} from './session-tab/delete-session-dialog/delete-session-dialog.component';
 import {SessionTabComponent} from './session-tab/session-tab.component';
+import {StateHistoryComponent} from './state-history/state-history.component';
 import {StateTabComponent} from './state-tab/state-tab.component';
 import {TraceEventComponent} from './trace-tab/trace-event/trace-event.component';
 import {TraceTabComponent} from './trace-tab/trace-tab.component';
@@ -80,6 +82,7 @@ const COMPONENTS = [
   ArtifactTabComponent,
   DeleteSessionDialogComponent,
   StateTabComponent,
+  StateHistoryComponent,
   TraceChartComponent,
   ViewImageDialogComponent,
   RunEvalConfigDialogComponent,
@@ -94,6 +97,7 @@ const COMPONENTS = [
   TraceEventComponent,
   JsonEditorComponent,
   HitlRequestComponent,
+  InstructionDiffDialogComponent,
 ];
 
 @NgModule({

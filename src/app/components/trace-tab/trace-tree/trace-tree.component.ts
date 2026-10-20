@@ -14,144 +14,169 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {Component, Input, OnChanges, SimpleChanges} from '@angular/core';
+
+import {Component, Input, OnChanges, OnDestroy, OnInit} from '@angular/core';
+import {Subscription} from 'rxjs';
 
 import {Span} from '../../../core/models/Trace';
 import {TraceService} from '../../../core/services/trace.service';
+import {formatDuration, formatTokens} from '../trace-tab.component';
 
+interface TraceRow {
+  span: Span;
+  level: number;
+  icon: string;
+  label: string;
+  /** Token counts of an LLM call, e.g. "↓1.8k ↑104". */
+  tokens: string;
+  tokensTitle: string;
+  start: number;
+  width: number;
+  duration: string;
+  eventId?: string;
+}
 
+/**
+ * Waterfall of one answer's spans: agents, LLM calls (with tokens) and tool
+ * calls, indented by nesting. Clicking a row with an event opens its details.
+ */
 @Component({
   selector: 'app-trace-tree',
   templateUrl: './trace-tree.component.html',
   styleUrl: './trace-tree.component.scss',
   standalone: false
 })
-export class TraceTreeComponent {
-  @Input() spans: any[] = [];
-  @Input() invocationId: string = '';
-  tree: Span[] = [];
-  eventData: Map<string, any>|undefined;
-  baseStartTimeMs = 0;
-  totalDurationMs = 1;
-  flatTree: {span: Span; level: number}[] = [];
-  traceLabelIconMap = new Map<string, string>([
-    ['Invocation', 'start'],
-    ['agent_run', 'directions_run'],
-    ['tool', 'build'],
-    ['call_llm', 'chat'],
-  ]);
+export class TraceTreeComponent implements OnInit, OnChanges, OnDestroy {
+  @Input() spans: Span[] = [];
+  @Input() invocationId = '';
+  rows: TraceRow[] = [];
   selectedRow: Span|undefined = undefined;
+  private eventData: Map<string, any>|undefined;
+  private readonly subscriptions = new Subscription();
 
   constructor(private traceService: TraceService) {}
 
   ngOnInit(): void {
-    this.tree = this.buildSpanTree(this.spans);
-    this.flatTree = this.flattenTree(this.tree);
-    const times = this.getGlobalTimes(this.spans);
-    this.baseStartTimeMs = times.start;
-    this.totalDurationMs = times.duration;
-    this.traceService.selectedTraceRow$.subscribe(
-        span => this.selectedRow = span);
-    this.traceService.eventData$.subscribe(e => this.eventData = e);
+    this.subscriptions.add(
+        this.traceService.selectedTraceRow$.subscribe(span => this.selectedRow = span));
+    this.subscriptions.add(
+        this.traceService.eventData$.subscribe(e => this.eventData = e));
   }
 
-
-  buildSpanTree(spans: Span[]): Span[] {
-    const spanClones = spans.map(span => ({...span}));
-    const spanMap = new Map<string, Span>();
-    const roots: Span[] = [];
-
-    spanClones.forEach(span => spanMap.set(span.span_id, span));
-    spanClones.forEach(span => {
-      if (span.parent_span_id && spanMap.has(span.parent_span_id)) {
-        const parent = spanMap.get(span.parent_span_id)!;
-        parent.children = parent.children || [];
-        parent.children.push(span);
-      } else {
-        roots.push(span);
-      }
-    });
-
-    return roots;
+  ngOnChanges(): void {
+    this.rows = this.buildRows(this.spans ?? []);
   }
 
-  getGlobalTimes(spans: Span[]) {
-    const start = Math.min(...spans.map(s => this.toMs(s.start_time)));
-    const end = Math.max(...spans.map(s => this.toMs(s.end_time)));
-    return {start, duration: end - start};
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
   }
 
-  toMs(nanos: number): number {
-    return nanos / 1_000_000;
-  }
-
-  getRelativeStart(span: Span): number {
-    return ((this.toMs(span.start_time) - this.baseStartTimeMs) /
-            this.totalDurationMs) *
-        100;
-  }
-
-  getRelativeWidth(span: Span): number {
-    return ((this.toMs(span.end_time) - this.toMs(span.start_time)) /
-            this.totalDurationMs) *
-        100;
-  }
-
-  flattenTree(spans: Span[], level: number = 0): any[] {
-    const tree = spans.flatMap(
-        span =>
-            [{span, level},
-             ...(span.children ? this.flattenTree(span.children, level + 1) :
-                                 [])]);
-    return tree
-  }
-
-  getSpanIcon(label: string) {
-    for (const [key, value] of this.traceLabelIconMap.entries()) {
-      if (label.startsWith(key)) {
-        return value;
-      }
-    }
-    return 'start';
-  }
-
-  getArray(n: number): number[] {
-    return Array.from({length: n});
-  }
-
-  selectRow(node: any) {
-    if (this.selectedRow && this.selectedRow.span_id == node.span.span_id) {
+  selectRow(row: TraceRow) {
+    if (this.selectedRow?.span_id === row.span.span_id) {
       this.traceService.selectedRow(undefined);
-      this.traceService.setHoveredMessages(undefined, this.invocationId)
+      this.traceService.setHoveredMessages(undefined, this.invocationId);
       return;
     }
-    this.traceService.selectedRow(node.span);
-    this.traceService.setHoveredMessages(node.span, this.invocationId)
+    this.traceService.selectedRow(row.span);
+    this.traceService.setHoveredMessages(row.span, this.invocationId);
   }
 
-  rowSelected(node: any) {
-    return this.selectedRow == node.span
+  isSelected(row: TraceRow): boolean {
+    return this.selectedRow?.span_id === row.span.span_id;
   }
 
-  isEventRow(node: any) {
-    if (!node.span.attributes) {
-      return false;
-    }
-    const eventId = node?.span.attributes['gcp.vertex.agent.event_id'];
-    if (eventId && this.eventData && this.eventData.has(eventId)) {
-      return true;
-    }
-    return false;
+  /** The span's event is shown in the chat, so it can be opened. */
+  hasEvent(row: TraceRow): boolean {
+    return !!row.eventId && !!this.eventData?.has(row.eventId);
   }
 
-  onHover(n: any) {
-    this.traceService.setHoveredMessages(n.span, this.invocationId)
+  onHover(row: TraceRow) {
+    this.traceService.setHoveredMessages(row.span, this.invocationId);
   }
 
   onHoverOut() {
-    this.traceService.setHoveredMessages(undefined, this.invocationId);
-    if (this.selectedRow) {
-      this.traceService.setHoveredMessages(this.selectedRow, this.invocationId);
+    this.traceService.setHoveredMessages(this.selectedRow, this.invocationId);
+  }
+
+  private buildRows(spans: Span[]): TraceRow[] {
+    if (!spans.length) {
+      return [];
     }
+    const start = Math.min(...spans.map((span) => span.start_time));
+    const total = Math.max(1, Math.max(...spans.map((span) => span.end_time)) - start);
+    const byId = new Map(spans.map((span) => [span.span_id, span]));
+    // generate_content duplicates its call_llm parent; drop it and keep any
+    // children under the nearest shown ancestor.
+    const hidden = (span: Span) => span.name.startsWith('generate_content');
+    const shownParent = (span: Span): string | undefined => {
+      let parentId = span.parent_span_id;
+      while (parentId && byId.has(parentId) && hidden(byId.get(parentId)!)) {
+        parentId = byId.get(parentId)!.parent_span_id;
+      }
+      return parentId && byId.has(parentId) ? parentId : undefined;
+    };
+    const children = new Map<string | undefined, Span[]>();
+    for (const span of spans) {
+      if (hidden(span)) {
+        continue;
+      }
+      const parent = shownParent(span);
+      const list = children.get(parent) ?? [];
+      list.push(span);
+      children.set(parent, list);
+    }
+    const rows: TraceRow[] = [];
+    const visit = (parent: string | undefined, level: number) => {
+      const list = (children.get(parent) ?? []).sort((a, b) => a.start_time - b.start_time);
+      for (const span of list) {
+        rows.push(this.toRow(span, level, start, total));
+        visit(span.span_id, level + 1);
+      }
+    };
+    visit(undefined, 0);
+    return rows;
+  }
+
+  private toRow(span: Span, level: number, start: number, total: number): TraceRow {
+    const attributes = span.attributes ?? {};
+    const [kind, ...rest] = span.name.split(' ');
+    const name = rest.join(' ');
+    let icon = 'hub';
+    let label = span.name;
+    if (kind === 'invocation') {
+      icon = 'flag';
+      label = 'invocation';
+    } else if (kind === 'invoke_agent') {
+      icon = 'smart_toy';
+      label = name;
+    } else if (kind === 'call_llm') {
+      icon = 'chat';
+      label = `LLM ${attributes['gen_ai.request.model'] ?? ''}`.trim();
+    } else if (kind === 'execute_tool') {
+      icon = 'build';
+      label = name;
+    }
+    let tokens = '';
+    let tokensTitle = '';
+    if (kind === 'call_llm') {
+      const input = Number(attributes['gen_ai.usage.input_tokens']) || 0;
+      const output = Number(attributes['gen_ai.usage.output_tokens']) || 0;
+      const reasoning = Number(attributes['gen_ai.usage.reasoning.output_tokens']) || 0;
+      const cached = Number(attributes['gen_ai.usage.cache_read.input_tokens']) || 0;
+      tokens = `↓${formatTokens(input)} ↑${formatTokens(output)}`;
+      tokensTitle = `input ${input} (cached ${cached}) / output ${output} (thinking ${reasoning})`;
+    }
+    return {
+      span,
+      level,
+      icon,
+      label,
+      tokens,
+      tokensTitle,
+      start: ((span.start_time - start) / total) * 100,
+      width: Math.max(0.5, ((span.end_time - span.start_time) / total) * 100),
+      duration: formatDuration((span.end_time - span.start_time) / 1_000_000),
+      eventId: attributes['gcp.vertex.agent.event_id'],
+    };
   }
 }
