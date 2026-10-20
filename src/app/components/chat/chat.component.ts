@@ -117,6 +117,9 @@ const INVOCATION_ABORTED = 'INVOCATION_ABORTED';
 /** Session state key the backend stores answer ratings under. */
 const MESSAGE_FEEDBACK_STATE_KEY = 'message_feedback';
 
+/** How an agent or tool took part in a turn, in the flow diagram. */
+type FlowState = 'done' | 'running' | 'aborted';
+
 /** How many recent steps the collapsed activity panel keeps on screen. */
 const ACTIVITY_ROLLING_STEPS = 3;
 
@@ -220,6 +223,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   /** HITL requests by call id, and the answers sent from this page. */
   private readonly hitlRequests = new Map<string, HitlRequest>();
   private readonly hitlAnswers = new Map<string, HitlResolution>();
+  /** Graphviz (viz.js) for the flow diagram in the activity panel, loaded on first use. */
+  private viz?: Awaited<ReturnType<typeof instance>>;
+  private readonly activityFlowCache = new Map<string, {svg: string, html: SafeHtml}>();
   private activeSseSubscription?: Subscription;
   currentSessionState = {};
   private hasInitializedAfterUserLoad = false;
@@ -2300,6 +2306,175 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       first.activityExpanded = !first.activityExpanded;
     }
   }
+
+  isActivityFlowOpen(group: ActivityGroup): boolean {
+    return !!this.messages[group.start]?.activityFlowOpen;
+  }
+
+  toggleActivityFlow(group: ActivityGroup) {
+    const first = this.messages[group.start];
+    if (!first) {
+      return;
+    }
+    first.activityFlowOpen = !first.activityFlowOpen;
+    if (!this.viz) {
+      instance().then((viz) => {
+        this.viz = viz;
+        this.changeDetectorRef.markForCheck();
+      });
+    }
+  }
+
+  /**
+   * The turn as a workflow, in the order it ran: the question, each round of
+   * the root agent deciding what to do, the calls it made (side by side when
+   * parallel, each with the sub-agent's own tool calls in its lane), and the
+   * answer. Nodes still waiting for a result are drawn as running.
+   * Null until Graphviz (viz.js) is loaded.
+   */
+  activityFlowHtml(group: ActivityGroup): SafeHtml | null {
+    return this.activityFlow(group)?.html ?? null;
+  }
+
+  openActivityFlow(group: ActivityGroup) {
+    const flow = this.activityFlow(group);
+    if (flow) {
+      this.openViewImageDialog(flow.svg);
+    }
+  }
+
+  private activityFlow(group: ActivityGroup): {svg: string, html: SafeHtml} | null {
+    if (!this.viz) {
+      return null;
+    }
+    const dot = this.flowDot(group);
+    let cached = this.activityFlowCache.get(dot);
+    if (!cached) {
+      if (this.activityFlowCache.size > 100) {
+        this.activityFlowCache.clear();
+      }
+      const svg = this.viz.renderString(dot, {format: 'svg', engine: 'dot'})
+          .replace('<svg ', '<svg class="flow-graph" ');
+      cached = {svg, html: this.sanitizer.bypassSecurityTrustHtml(svg)};
+      this.activityFlowCache.set(dot, cached);
+    }
+    return cached;
+  }
+
+  /** Graphviz DOT of the turn's workflow; states go in `class` attributes (styles.scss). */
+  private flowDot(group: ActivityGroup): string {
+    const running = this.isActivityRunning(group);
+    const stopped = this.isActivityStopped(group);
+    // Result of every call in the turn, by call id.
+    const results = new Map<string, FlowState>();
+    for (const step of group.steps) {
+      const message = this.messages[step.index];
+      const response = message?.functionResponse;
+      if (response?.id) {
+        const aborted = this.eventData.get(message.eventId)?.errorCode === INVOCATION_ABORTED ||
+            response.response?.error === REJECTED_ERROR;
+        results.set(response.id, aborted ? 'aborted' : 'done');
+      }
+    }
+    const callState = (step: ActivityStep): FlowState =>
+        (step.callId && results.get(step.callId)) ||
+        (running ? 'running' : stopped ? 'aborted' : 'done');
+
+    // Rounds: the calls one model response made (they share an event), with
+    // the thoughts that led to them.
+    type Round = {eventId?: string, thoughts: string[], calls: ActivityStep[]};
+    const rounds: Round[] = [];
+    let thoughts: string[] = [];
+    for (const step of group.tree) {
+      if (step.kind === 'thought') {
+        thoughts.push(step.label);
+      } else if (step.kind === 'call') {
+        const eventId = this.messages[step.index]?.eventId;
+        let round = rounds[rounds.length - 1];
+        if (!round || round.eventId !== eventId || thoughts.length) {
+          round = {eventId, thoughts, calls: []};
+          rounds.push(round);
+          thoughts = [];
+        }
+        round.calls.push(step);
+      }
+    }
+    if (thoughts.length) {
+      rounds.push({thoughts, calls: []});
+    }
+
+    const quote = (text: string) =>
+        `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+    const short = (text: string, max = 24) => text.length > max ? `${text.slice(0, max - 1)}…` : text;
+    const lines: string[] = [];
+    let count = 0;
+    const node = (label: string, kind: string, state: FlowState, attrs = '') => {
+      const id = `n${count++}`;
+      lines.push(`  ${id} [label=${quote(label)} class="flow-${kind} flow-${state}"${attrs}]`);
+      return id;
+    };
+    const edge = (from: string, to: string, state: FlowState) =>
+        lines.push(`  ${from} -> ${to} [class="flow-${state}"]`);
+
+    let previous = [node(this.i18n.t('flow.question'), 'start', 'done', ' shape=ellipse')];
+    rounds.forEach((round, i) => {
+      const last = i === rounds.length - 1;
+      const thinking = last && running && round.calls.length === 0;
+      const label = this.i18n.t('flow.decide') +
+          (round.thoughts.length ? `\n${short(round.thoughts[round.thoughts.length - 1])}` : '');
+      const decide = node(label, 'round', thinking ? 'running' : 'done');
+      previous.forEach((from) => edge(from, decide, thinking ? 'running' : 'done'));
+      if (!round.calls.length) {
+        previous = [decide];
+        return;
+      }
+      previous = round.calls.map((call) => {
+        const state = callState(call);
+        lines.push(`  subgraph cluster_${count} {`);
+        lines.push(`  class="flow-lane flow-${state}" style=rounded label=""`);
+        const callNode = node(short(call.label, 28), 'call', state);
+        let tail = callNode;
+        for (const child of call.children ?? []) {
+          if (child.kind !== 'call') {
+            continue;
+          }
+          const childState = callState(child);
+          const toolNode = node(short(child.label, 28), 'tool', childState);
+          edge(tail, toolNode, childState);
+          tail = toolNode;
+        }
+        lines.push('  }');
+        edge(decide, callNode, state);
+        return tail;
+      });
+    });
+
+    const lastRound = rounds[rounds.length - 1];
+    const after = this.messages[group.end + 1];
+    if (stopped) {
+      const end = node(this.i18n.t('flow.stopped'), 'end', 'aborted', ' shape=ellipse');
+      previous.forEach((from) => edge(from, end, 'aborted'));
+    } else if (running) {
+      // The calls came back and the root is deciding again or writing the answer.
+      if (lastRound?.calls.length && lastRound.calls.every((call) => callState(call) !== 'running')) {
+        const next = node(this.i18n.t('flow.thinking'), 'round', 'running');
+        previous.forEach((from) => edge(from, next, 'running'));
+      }
+    } else if (after?.role === 'bot' && !after.thought) {
+      const answer = node(this.i18n.t('flow.answer'), 'end', 'done', ' shape=ellipse');
+      previous.forEach((from) => edge(from, answer, 'done'));
+    }
+
+    return [
+      'digraph {',
+      '  graph [rankdir=TB bgcolor=transparent nodesep=0.3 ranksep=0.35]',
+      '  node [shape=box style="rounded" fontname="Helvetica" fontsize=11 margin="0.18,0.06" height=0.3]',
+      '  edge [arrowsize=0.6]',
+      ...lines,
+      '}',
+    ].join('\n');
+  }
+
 
   /** First line of a thought summary (e.g. "**Planning the search**"), shown while collapsed. */
   thoughtTitle(text: string | undefined): string {

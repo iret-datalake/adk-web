@@ -273,3 +273,151 @@ markdown img {
     height: 18px;
   }
 }
+
+// Agent graph with the agents / tools a turn used (ChatComponent.decorateFlowSvg).
+// Overrides the colors ADK's graph builder draws with, to follow the theme.
+svg.flow-graph {
+  // Also in the image viewer, whose SVG area is white for Mermaid diagrams.
+  background-color: var(--app-bg);
+
+  .graph > polygon {
+    fill: transparent;
+    stroke: none;
+  }
+
+  .node polygon,
+  .node ellipse,
+  .node path,
+  .cluster polygon,
+  .cluster path {
+    fill: var(--app-surface);
+    stroke: var(--app-border);
+  }
+
+  // Keep Graphviz's font: node sizes are computed from its metrics.
+  .node text,
+  .cluster text {
+    fill: var(--app-text-secondary);
+  }
+
+  .edge path {
+    stroke: var(--app-border);
+  }
+
+  .edge polygon {
+    fill: var(--app-border);
+    stroke: var(--app-border);
+  }
+
+  .node.flow-done polygon,
+  .node.flow-done ellipse,
+  .node.flow-done path {
+    fill: var(--app-accent-soft);
+    stroke: var(--app-accent);
+    stroke-width: 1.5;
+  }
+
+  .node.flow-done text,
+  .node.flow-running text {
+    fill: var(--app-text);
+  }
+
+  .node.flow-running polygon,
+  .node.flow-running ellipse,
+  .node.flow-running path {
+    fill: var(--app-accent-soft);
+    stroke: var(--app-running);
+    stroke-width: 2;
+    animation: flow-pulse 1.2s ease-in-out infinite;
+  }
+
+  .node.flow-aborted polygon,
+  .node.flow-aborted ellipse,
+  .node.flow-aborted path {
+    stroke: var(--app-text-tertiary);
+    stroke-dasharray: 4 3;
+  }
+
+  .edge.flow-done path {
+    stroke: var(--app-accent);
+    stroke-width: 2;
+  }
+
+  .edge.flow-done polygon {
+    fill: var(--app-accent);
+    stroke: var(--app-accent);
+  }
+
+  // The edge of a call still waiting for its result: the "current" step.
+  .edge.flow-running path {
+    stroke: var(--app-running);
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+    animation: flow-dash 0.8s linear infinite;
+  }
+
+  .edge.flow-running polygon {
+    fill: var(--app-running);
+    stroke: var(--app-running);
+  }
+
+  .edge.flow-aborted path {
+    stroke: var(--app-text-tertiary);
+    stroke-dasharray: 4 3;
+  }
+}
+
+// Workflow of a turn (ChatComponent.flowDot): node kinds and the lane of each call.
+svg.flow-graph {
+  .cluster.flow-lane polygon,
+  .cluster.flow-lane path {
+    fill: transparent;
+    stroke: var(--app-border);
+    stroke-dasharray: 3 3;
+  }
+
+  .cluster.flow-lane.flow-running polygon,
+  .cluster.flow-lane.flow-running path {
+    stroke: var(--app-running);
+  }
+
+  .node.flow-round.flow-done polygon,
+  .node.flow-round.flow-done path {
+    fill: var(--app-surface-variant);
+    stroke: var(--app-border);
+  }
+
+  .node.flow-start ellipse,
+  .node.flow-end.flow-done ellipse {
+    fill: var(--app-success-soft);
+    stroke: var(--app-success);
+  }
+
+  .node.flow-start text,
+  .node.flow-end text {
+    fill: var(--app-text);
+  }
+
+  .node.flow-tool text {
+    font-size: 10px;
+  }
+}
+
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+@keyframes flow-pulse {
+  50% {
+    stroke-opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  svg.flow-graph .edge.flow-running path,
+  svg.flow-graph .node.flow-running * {
+    animation: none;
+  }
+}

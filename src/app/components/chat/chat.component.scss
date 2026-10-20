@@ -479,11 +479,74 @@
   }
 }
 
+// Divider under the header, with the flow diagram toggle.
+.activity-flow-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px 0;
+  border-top: 1px solid var(--app-divider);
+  animation: activity-expand 0.2s ease-out;
+}
+
+.activity-flow-toggle {
+  // The component-wide `button` rule adds 20px side margins.
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px 2px 6px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--app-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    background-color: var(--app-hover);
+  }
+
+  &.active {
+    border-color: var(--app-accent);
+    background-color: var(--app-accent-soft);
+    color: var(--app-on-accent-soft);
+  }
+}
+
+// The agent graph of this turn (see .flow-graph in styles.scss).
+.activity-flow {
+  margin: 6px 12px 2px;
+  padding: 6px;
+  border-radius: 8px;
+  background-color: var(--app-bg);
+  overflow-x: auto;
+  cursor: zoom-in;
+
+  ::ng-deep svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+  }
+}
+
+.activity-flow-status {
+  margin: 6px 12px 2px;
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+}
+
 .activity-steps {
   margin: 0;
   padding: 4px 12px 10px 12px;
   list-style: none;
-  border-top: 1px solid var(--app-divider);
   animation: activity-expand 0.2s ease-out;
 }
 

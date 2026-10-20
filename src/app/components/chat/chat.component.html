@@ -409,6 +409,29 @@
                         <markdown class="activity-thought-text" [data]="step.text"></markdown>
                       }
                     </ng-template>
+                    <div class="activity-flow-bar">
+                      <button
+                        type="button"
+                        class="activity-flow-toggle"
+                        [class.active]="isActivityFlowOpen(group)"
+                        [attr.aria-pressed]="isActivityFlowOpen(group)"
+                        (click)="toggleActivityFlow(group)"
+                      >
+                        <mat-icon>account_tree</mat-icon>{{ 'activity.flow' | t }}
+                      </button>
+                    </div>
+                    @if (isActivityFlowOpen(group)) {
+                      @if (activityFlowHtml(group); as flow) {
+                        <div
+                          class="activity-flow"
+                          [innerHTML]="flow"
+                          [matTooltip]="'activity.flowZoom' | t"
+                          (click)="openActivityFlow(group)"
+                        ></div>
+                      } @else {
+                        <div class="activity-flow-status">{{ 'activity.flowLoading' | t }}</div>
+                      }
+                    }
                     <ol class="activity-steps">
                       @for (step of group.tree; track step.index) {
                         <li
