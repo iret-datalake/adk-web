@@ -38,13 +38,13 @@
       </div>
     </div>
     <div class="zoom-controls">
-      <button type="button" (click)="zoomOut()" title="縮小">
+      <button type="button" (click)="zoomOut()" [title]="'viewer.zoomOut' | t">
         <span class="material-symbols-outlined">zoom_out</span>
       </button>
-      <button type="button" class="zoom-percent" (click)="resetZoom()" title="元のサイズ">
+      <button type="button" class="zoom-percent" (click)="resetZoom()" [title]="'viewer.reset' | t">
         {{ zoomPercent }}%
       </button>
-      <button type="button" (click)="zoomIn()" title="拡大">
+      <button type="button" (click)="zoomIn()" [title]="'viewer.zoomIn' | t">
         <span class="material-symbols-outlined">zoom_in</span>
       </button>
     </div>

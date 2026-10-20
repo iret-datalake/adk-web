@@ -17,13 +17,13 @@
 <div class="state-wrapper">
     <div class="state-header">
         <div class="state-title-group">
-            <div class="state-title">Session contents</div>
+            <div class="state-title">{{ 'state.title' | t }}</div>
             <div class="state-subtitle">
                 <span *ngIf="availablePlatforms.length; else emptyStateText">
-                    {{ availablePlatforms.length }} platform(s) detected
+                    {{ 'state.platformsDetected' | t: {count: availablePlatforms.length} }}
                 </span>
                 <ng-template #emptyStateText>
-                    No platform data available
+                    {{ 'state.noPlatforms' | t }}
                 </ng-template>
             </div>
         </div>
@@ -31,7 +31,7 @@
 
     @if (availablePlatforms.length === 0) {
         <div class="state-empty">
-            <p>No session state is currently available.</p>
+            <p>{{ 'state.empty' | t }}</p>
         </div>
     } @else {
         <mat-accordion class="platform-accordion">
@@ -48,7 +48,7 @@
                                             [disabled]="isPruningPlatform[platform]"
                                             (click)="onEditButtonClick(platform, $event)">
                                             <span class="material-symbols-outlined action-icon">edit</span>
-                                            <span class="action-label">{{ isEditing(platform) ? 'Done' : 'Edit' }}</span>
+                                            <span class="action-label">{{ (isEditing(platform) ? 'state.done' : 'state.edit') | t }}</span>
                                         </button>
                                         <button
                                             *ngIf="isEditing(platform)"
@@ -57,7 +57,7 @@
                                             [disabled]="isPruningPlatform[platform]"
                                             (click)="onSelectAll(platform, $event)">
                                             <span class="material-symbols-outlined action-icon">select_all</span>
-                                            <span class="action-label">Select all</span>
+                                            <span class="action-label">{{ 'state.selectAll' | t }}</span>
                                         </button>
                                         <button
                                             *ngIf="isEditing(platform)"
@@ -66,13 +66,13 @@
                                             [disabled]="!selectedCount(platform) || isPruningPlatform[platform]"
                                             (click)="onDeleteSelected(platform, $event)">
                                             <span class="material-symbols-outlined action-icon">delete</span>
-                                            <span class="action-label">Delete</span>
+                                            <span class="action-label">{{ 'state.delete' | t }}</span>
                                             <span *ngIf="selectedCount(platform)">({{ selectedCount(platform) }})</span>
                                         </button>
                                     </div>
                                 </ng-container>
                                 <ng-template #pruningIndicator>
-                                    <div class="platform-pruning">Deleting...</div>
+                                    <div class="platform-pruning">{{ 'state.deleting' | t }}</div>
                                 </ng-template>
                         </div>
                     </mat-expansion-panel-header>
@@ -103,11 +103,11 @@
                                             <div class="task-card-body">
                                                 <div class="task-meta-row" *ngIf="task.assigneeName || task.dueOn">
                                                     <div class="task-meta" *ngIf="task.assigneeName">
-                                                        <span class="meta-label">Assignee</span>
+                                                        <span class="meta-label">{{ 'state.assignee' | t }}</span>
                                                         <span class="meta-value">{{ task.assigneeName }}</span>
                                                     </div>
                                                     <div class="task-meta" *ngIf="task.dueOn">
-                                                        <span class="meta-label">Due</span>
+                                                        <span class="meta-label">{{ 'state.due' | t }}</span>
                                                         <span class="meta-value" [ngClass]="{'overdue': task.overdue}">
                                                             {{ task.dueOn | date:'MMM d, y' }}
                                                         </span>
@@ -116,14 +116,14 @@
 
                                                 <div class="task-meta-row" *ngIf="task.priority">
                                                     <div class="task-meta">
-                                                        <span class="meta-label">Priority</span>
+                                                        <span class="meta-label">{{ 'state.priority' | t }}</span>
                                                         <span class="meta-chip">{{ task.priority }}</span>
                                                     </div>
                                                 </div>
 
                                                 <div class="task-meta-row" *ngIf="task.projectNames.length">
                                                     <div class="task-meta">
-                                                        <span class="meta-label">Projects</span>
+                                                        <span class="meta-label">{{ 'state.projects' | t }}</span>
                                                         <div class="meta-pills">
                                                             @for (project of task.projectNames; track project) {
                                                                 <span class="meta-chip">{{ project }}</span>
@@ -134,7 +134,7 @@
 
                                                 <div class="task-meta-row" *ngIf="task.tagNames.length">
                                                     <div class="task-meta">
-                                                        <span class="meta-label">Tags</span>
+                                                        <span class="meta-label">{{ 'state.tags' | t }}</span>
                                                         <div class="meta-pills">
                                                             @for (tag of task.tagNames; track tag) {
                                                                 <span class="meta-chip ghost">{{ tag }}</span>
@@ -158,10 +158,10 @@
                                                     *ngIf="shouldShowAsanaDescription(task)"
                                                     [attr.aria-expanded]="isAsanaDescriptionExpanded(task.gid)"
                                                     (click)="toggleAsanaDescription(task.gid)">
-                                                    {{ isAsanaDescriptionExpanded(task.gid) ? 'Show less' : 'Show more' }}
+                                                    {{ isAsanaDescriptionExpanded(task.gid) ? ('state.showLess' | t) : ('state.showMore' | t) }}
                                                 </button>
                                                 <a *ngIf="task.permalinkUrl" [href]="task.permalinkUrl" target="_blank" rel="noopener noreferrer">
-                                                    Open in Asana
+                                                    {{ 'state.openIn' | t: {platform: 'Asana'} }}
                                                     <span class="material-symbols-outlined">open_in_new</span>
                                                 </a>
                                             </footer>
@@ -170,7 +170,7 @@
                                 </div>
                             } @else {
                                 <div class="state-empty">
-                                    <p>No Asana tasks are currently available.</p>
+                                    <p>{{ 'state.noAsana' | t }}</p>
                                 </div>
                             }
                         } @else if (platform === 'gdrive') {
@@ -193,7 +193,7 @@
 
                                             <footer class="task-card-footer">
                                                 <a *ngIf="file.webViewLink" [href]="file.webViewLink" target="_blank" rel="noopener noreferrer">
-                                                    Open in Drive
+                                                    {{ 'state.openIn' | t: {platform: 'Google Drive'} }}
                                                     <span class="material-symbols-outlined">open_in_new</span>
                                                 </a>
                                             </footer>
@@ -202,7 +202,7 @@
                                 </div>
                             } @else {
                                 <div class="state-empty">
-                                    <p>No Google Drive files are currently available.</p>
+                                    <p>{{ 'state.noDrive' | t }}</p>
                                 </div>
                             }
                         } @else if (platform === 'backlog') {
@@ -230,11 +230,11 @@
                                             <div class="task-card-body">
                                                 <div class="task-meta-row" *ngIf="issue.assigneeName || issue.dueDate">
                                                     <div class="task-meta" *ngIf="issue.assigneeName">
-                                                        <span class="meta-label">Assignee</span>
+                                                        <span class="meta-label">{{ 'state.assignee' | t }}</span>
                                                         <span class="meta-value">{{ issue.assigneeName }}</span>
                                                     </div>
                                                     <div class="task-meta" *ngIf="issue.dueDate">
-                                                        <span class="meta-label">Due</span>
+                                                        <span class="meta-label">{{ 'state.due' | t }}</span>
                                                         <span class="meta-value" [ngClass]="{'overdue': issue.overdue}">
                                                             {{ issue.dueDate | date:'MMM d, y' }}
                                                         </span>
@@ -243,18 +243,18 @@
 
                                                 <div class="task-meta-row" *ngIf="issue.priority || issue.issueTypeName">
                                                     <div class="task-meta" *ngIf="issue.priority">
-                                                        <span class="meta-label">Priority</span>
+                                                        <span class="meta-label">{{ 'state.priority' | t }}</span>
                                                         <span class="meta-chip">{{ issue.priority }}</span>
                                                     </div>
                                                     <div class="task-meta" *ngIf="issue.issueTypeName">
-                                                        <span class="meta-label">Type</span>
+                                                        <span class="meta-label">{{ 'state.type' | t }}</span>
                                                         <span class="meta-chip ghost">{{ issue.issueTypeName }}</span>
                                                     </div>
                                                 </div>
 
                                                 <div class="task-meta-row" *ngIf="issue.categoryNames.length">
                                                     <div class="task-meta">
-                                                        <span class="meta-label">Categories</span>
+                                                        <span class="meta-label">{{ 'state.categories' | t }}</span>
                                                         <div class="meta-pills">
                                                             @for (category of issue.categoryNames; track category) {
                                                                 <span class="meta-chip ghost">{{ category }}</span>
@@ -265,7 +265,7 @@
 
                                                 <div class="task-meta-row" *ngIf="issue.milestoneNames.length">
                                                     <div class="task-meta">
-                                                        <span class="meta-label">Milestones</span>
+                                                        <span class="meta-label">{{ 'state.milestones' | t }}</span>
                                                         <div class="meta-pills">
                                                             @for (milestone of issue.milestoneNames; track milestone) {
                                                                 <span class="meta-chip">{{ milestone }}</span>
@@ -276,7 +276,7 @@
 
                                                 <div class="task-meta-row" *ngIf="issue.versionNames.length">
                                                     <div class="task-meta">
-                                                        <span class="meta-label">Versions</span>
+                                                        <span class="meta-label">{{ 'state.versions' | t }}</span>
                                                         <div class="meta-pills">
                                                             @for (version of issue.versionNames; track version) {
                                                                 <span class="meta-chip ghost">{{ version }}</span>
@@ -299,10 +299,10 @@
                                                     *ngIf="shouldShowBacklogDescription(issue)"
                                                     [attr.aria-expanded]="isBacklogDescriptionExpanded(issue.issueKey)"
                                                     (click)="toggleBacklogDescription(issue.issueKey)">
-                                                    {{ isBacklogDescriptionExpanded(issue.issueKey) ? 'Show less' : 'Show more' }}
+                                                    {{ isBacklogDescriptionExpanded(issue.issueKey) ? ('state.showLess' | t) : ('state.showMore' | t) }}
                                                 </button>
                                                 <a *ngIf="issue.permalinkUrl" [href]="issue.permalinkUrl" target="_blank" rel="noopener noreferrer">
-                                                    Open in Backlog
+                                                    {{ 'state.openIn' | t: {platform: 'Backlog'} }}
                                                     <span class="material-symbols-outlined">open_in_new</span>
                                                 </a>
                                             </footer>
@@ -311,7 +311,7 @@
                                 </div>
                             } @else {
                                 <div class="state-empty">
-                                    <p>No Backlog issues are currently available.</p>
+                                    <p>{{ 'state.noBacklog' | t }}</p>
                                 </div>
                             }
                         } @else if (platform === 'slack') {
@@ -349,10 +349,10 @@
                                                     *ngIf="shouldShowSlackToggle(message)"
                                                     [attr.aria-expanded]="isSlackMessageExpanded(message.id)"
                                                     (click)="toggleSlackMessageExpansion(message.id)">
-                                                    {{ isSlackMessageExpanded(message.id) ? 'Show less' : 'Show more' }}
+                                                    {{ isSlackMessageExpanded(message.id) ? ('state.showLess' | t) : ('state.showMore' | t) }}
                                                 </button>
                                                 <a *ngIf="message.permalink" [href]="message.permalink" target="_blank" rel="noopener noreferrer">
-                                                    Open in Slack
+                                                    {{ 'state.openIn' | t: {platform: 'Slack'} }}
                                                     <span class="material-symbols-outlined">open_in_new</span>
                                                 </a>
                                             </footer>
@@ -361,7 +361,7 @@
                                 </div>
                             } @else {
                                 <div class="state-empty">
-                                    <p>No Slack messages are currently available.</p>
+                                    <p>{{ 'state.noSlack' | t }}</p>
                                 </div>
                             }
                         } @else {

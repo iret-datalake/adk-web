@@ -17,7 +17,7 @@
 .session-wrapper {
   padding-left: 25px;
   padding-right: 25px;
-  color: #9aa0a6;
+  color: var(--app-text-tertiary);
   font-size: 14px;
   font-weight: 700;
 }
@@ -26,21 +26,21 @@
   display: flex;
   justify-content: space-between;
   border: none;
-  background-color: #e0e3e7;
+  background-color: light-dark(#e0e3e7, #2d2f31);
   border-radius: 8px;
   margin-bottom: 4px;
   cursor: pointer;
 
   &:hover {
-    background-color: #d2d6db;
+    background-color: light-dark(#d2d6db, #37393b);
   }
   &.current {
-    background-color: #b0b6c2;
+    background-color: light-dark(#b0b6c2, #3f4a5c);
   }
 }
 
 .session-id {
-  color: #5f6368;
+  color: var(--app-text-secondary);
   font-family: 'Google Sans Mono', monospace;
   font-size: 14px;
   font-style: normal;
@@ -50,7 +50,7 @@
 }
 
 .session-brief {
-  color: #202124;
+  color: var(--app-text);
   font-size: 14px;
   font-weight: 600;
   line-height: 20px;
@@ -58,7 +58,7 @@
 }
 
 .session-date {
-  color: #3c4043;
+  color: var(--app-text);
   font-family: Roboto;
   font-size: 12px;
   font-style: normal;

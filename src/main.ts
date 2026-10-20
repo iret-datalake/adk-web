@@ -18,15 +18,17 @@
 import {platformBrowserDynamic} from '@angular/platform-browser-dynamic';
 import {AppModule} from './app/app.module';
 
-fetch('./assets/config/runtime-config.json')
+// Bypass the HTTP cache so edits to the config (backend URL, logo) show up on
+// reload, and bootstrap once, after the config is known.
+fetch('./assets/config/runtime-config.json', {cache: 'no-store'})
   .then((response) => response.json())
+  .catch((err) => {
+    console.error('Failed to load runtime-config.json', err);
+    return {};
+  })
   .then((config) => {
     (window as any)['runtimeConfig'] = config;
     platformBrowserDynamic()
       .bootstrapModule(AppModule)
       .catch((err) => console.error(err));
   });
-
-platformBrowserDynamic()
-  .bootstrapModule(AppModule)
-  .catch((err) => console.error(err));

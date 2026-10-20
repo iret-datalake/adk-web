@@ -28,6 +28,7 @@ import {MatExpansionModule} from '@angular/material/expansion';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatIconModule} from '@angular/material/icon';
 import {MatInputModule} from '@angular/material/input';
+import {MatMenuModule} from '@angular/material/menu';
 import {MatListModule} from '@angular/material/list';
 import {MatPaginatorModule} from '@angular/material/paginator';
 import {MatProgressBarModule} from '@angular/material/progress-bar';
@@ -44,6 +45,7 @@ import {BrowserAnimationsModule} from '@angular/platform-browser/animations';
 import {NgxJsonViewerModule} from 'ngx-json-viewer';
 import {MarkdownModule} from 'ngx-markdown';
 
+import {TranslatePipe} from '../core/i18n/translate.pipe';
 import {MarkdownEnhanceDirective} from '../directives/markdown-enhance.directive';
 import {ResizableBottomDirective} from '../directives/resizable-bottom.directive';
 import {ResizableDrawerDirective} from '../directives/resizable-drawer.directive';
@@ -87,6 +89,7 @@ const COMPONENTS = [
   ResizableDrawerDirective,
   ResizableBottomDirective,
   MarkdownEnhanceDirective,
+  TranslatePipe,
   TraceTabComponent,
   TraceTreeComponent,
   TraceEventComponent,
@@ -129,6 +132,7 @@ const COMPONENTS = [
     MatChipsModule,
     MatDialogModule,
     MatButtonToggleModule,
+    MatMenuModule,
   ],
 })
 export class ComponentModule {
