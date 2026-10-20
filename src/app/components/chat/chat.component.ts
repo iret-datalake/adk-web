@@ -2331,7 +2331,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       const callId = call.id;
       const platform = this.platformLabel(call.name);
       if (platform) {
-        return {index, kind: 'call', label: this.i18n.t('activity.search', {platform}), detail: args.request, nested, callId};
+        return {index, kind: 'call', label: this.i18n.t('activity.call', {platform}), detail: args.request, nested, callId};
       }
       if (call.name === 'transfer_to_agent') {
         const agent = this.agentDisplayName(args.agent_name);
@@ -2368,7 +2368,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       return {
         index,
         kind: 'response',
-        label: platform ? this.i18n.t('activity.searchAborted', {platform}) :
+        label: platform ? this.i18n.t('activity.callAborted', {platform}) :
                           this.i18n.t('activity.aborted', {name}),
         nested,
         aborted: true,
@@ -2377,7 +2377,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     return {
       index,
       kind: 'response',
-      label: platform ? this.i18n.t('activity.searchDone', {platform}) :
+      label: platform ? this.i18n.t('activity.callDone', {platform}) :
                         this.i18n.t('activity.done', {name}),
       nested,
     };
@@ -2399,7 +2399,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     const steps = this.i18n.t('activity.steps', {count: group.steps.length});
     if (platforms.length > 0) {
       const separator = this.i18n.t('activity.platformSeparator');
-      return this.i18n.t('activity.summarySearch', {platforms: platforms.join(separator), steps});
+      return this.i18n.t('activity.summaryCall', {platforms: platforms.join(separator), steps});
     }
     if (group.steps.every((step) => step.kind === 'thought')) {
       return this.i18n.t('activity.summaryThought', {steps});
