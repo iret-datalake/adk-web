@@ -522,6 +522,7 @@
                           </div>
                         } @else {
                           <markdown
+                            appMarkdownEnhance
                             class="message-text"
                             [data]="message.text"
                             [ngStyle]="{
@@ -568,6 +569,13 @@
                                   [base64data]="message.inlineData.data"
                                 ></app-audio-player>
                               </div>
+                            }
+                            @case (MediaType.VIDEO) {
+                              <video
+                                class="generated-video"
+                                controls
+                                [src]="message.inlineData.data"
+                              ></video>
                             }
                             @case (MediaType.TEXT) {
                               <div>
@@ -616,6 +624,12 @@
                               (click)="openViewImageDialog(message.inlineData.data)"
                             />
                           </div>
+                        } @else if (message.inlineData.mimeType.startsWith("video/")) {
+                          <video
+                            class="video-preview-chat"
+                            controls
+                            [src]="message.inlineData.data"
+                          ></video>
                         } @else {
                           <div class="attachment">
                             <mat-icon>insert_drive_file</mat-icon>

@@ -44,6 +44,7 @@ import {BrowserAnimationsModule} from '@angular/platform-browser/animations';
 import {NgxJsonViewerModule} from 'ngx-json-viewer';
 import {MarkdownModule} from 'ngx-markdown';
 
+import {MarkdownEnhanceDirective} from '../directives/markdown-enhance.directive';
 import {ResizableBottomDirective} from '../directives/resizable-bottom.directive';
 import {ResizableDrawerDirective} from '../directives/resizable-drawer.directive';
 
@@ -85,6 +86,7 @@ const COMPONENTS = [
   AudioPlayerComponent,
   ResizableDrawerDirective,
   ResizableBottomDirective,
+  MarkdownEnhanceDirective,
   TraceTabComponent,
   TraceTreeComponent,
   TraceEventComponent,

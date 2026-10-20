@@ -69,6 +69,9 @@
                 <app-audio-player [base64data]="selectedArtifacts[i].data"></app-audio-player>
               </div>
             }
+            @case (MediaType.VIDEO) {
+              <video class="generated-video" controls [src]="selectedArtifacts[i].data"></video>
+            }
           }
         </div>
       </div>
