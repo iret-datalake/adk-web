@@ -27,20 +27,93 @@
   }
 }
 
+.viewer {
+  position: relative;
+  // Keeps the close button and zoom controls clear of the image.
+  padding: 44px 16px 56px;
+}
+
 .image-wrapper {
-  flex-grow: 1; /* Allow image wrapper to take available space */
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: auto; /* Allow scrolling if image is larger than dialog */
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+
+  &.dragging {
+    cursor: grabbing;
+  }
+}
+
+.zoom-layer {
+  transform-origin: center center;
+  transition: transform 0.08s ease-out;
+
+  .dragging & {
+    transition: none;
+  }
 }
 
 .image-wrapper img,
 .image-wrapper .svg-container {
+  display: block;
   max-width: 90vw;
-  max-height: 90vh;
+  max-height: 85vh;
   object-fit: contain; /* Ensure image fits within bounds without cropping */
   border-radius: 8px; /* Rounded corners for the image */
+}
+
+.image-wrapper .svg-container {
+  background-color: #ffffff;
+
+  ::ng-deep svg {
+    display: block;
+  }
+}
+
+.zoom-controls {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border-radius: 18px;
+  background-color: rgba(32, 33, 36, 0.8);
+
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 0 6px;
+    border: none;
+    border-radius: 16px;
+    background: none;
+    color: #ffffff;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.15);
+    }
+  }
+
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+
+  .zoom-percent {
+    min-width: 52px;
+  }
 }
 
 .no-image-placeholder {

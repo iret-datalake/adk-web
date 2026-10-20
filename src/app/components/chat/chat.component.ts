@@ -26,11 +26,11 @@ import {MatSnackBar} from '@angular/material/snack-bar';
 import {DomSanitizer, SafeHtml} from '@angular/platform-browser';
 import {ActivatedRoute, NavigationEnd, Router} from '@angular/router';
 import {instance} from '@viz-js/viz';
-import {BehaviorSubject, catchError, combineLatest, distinctUntilChanged, finalize, filter, map, Observable, of, shareReplay, switchMap, take, tap} from 'rxjs';
+import {BehaviorSubject, catchError, combineLatest, distinctUntilChanged, finalize, filter, map, Observable, of, shareReplay, Subscription, switchMap, take, tap} from 'rxjs';
 import stc from 'string-to-color';
 
 import {URLUtil} from '../../../utils/url-util';
-import {AgentRunRequest} from '../../core/models/AgentRunRequest';
+import {AgentRunRequest, ThinkingMode} from '../../core/models/AgentRunRequest';
 import {Session} from '../../core/models/Session';
 import {User} from '../../core/models/User';
 import {AgentService} from '../../core/services/agent.service';
@@ -40,7 +40,7 @@ import {DownloadService} from '../../core/services/download.service';
 import {EvalService} from '../../core/services/eval.service';
 import {EventService} from '../../core/services/event.service';
 import {FeatureFlagService} from '../../core/services/feature-flag.service';
-import {SessionService} from '../../core/services/session.service';
+import {FeedbackDirection, MessageFeedback, SessionService} from '../../core/services/session.service';
 import {UserService} from '../../core/services/user.service';
 import {TraceService} from '../../core/services/trace.service';
 import {VideoService} from '../../core/services/video.service';
@@ -51,10 +51,17 @@ import {AudioPlayerComponent} from '../audio-player/audio-player.component';
 import {EditFunctionArgsDialogComponent} from '../eval-tab/edit-function-args-dialog/edit-function-args-dialog.component';
 import {EvalCase, EvalTabComponent} from '../eval-tab/eval-tab.component';
 import {EventTabComponent} from '../event-tab/event-tab.component';
-import {PendingEventDialogComponent} from '../pending-event-dialog/pending-event-dialog.component';
 import {DeleteSessionDialogComponent, DeleteSessionDialogData,} from '../session-tab/delete-session-dialog/delete-session-dialog.component';
 import {SessionTabComponent} from '../session-tab/session-tab.component';
 import {ViewImageDialogComponent} from '../view-image-dialog/view-image-dialog.component';
+import {I18nService} from '../../core/i18n/i18n.service';
+import {Language, MessageKey} from '../../core/i18n/messages';
+import {APPROVAL_REQUESTED_ERROR, getHitlRequest, HitlRequest, REJECTED_ERROR} from '../../core/models/Hitl';
+import {getLogoConfig} from '../../core/models/RuntimeConfig';
+import {HitlResolution} from '../hitl-request/hitl-request.component';
+import {InstructionDiffDialogComponent} from '../instruction-diff-dialog/instruction-diff-dialog.component';
+import {DevModeService} from '../../core/services/dev-mode.service';
+import {ThemeService} from '../../core/services/theme.service';
 
 function fixBase64String(base64: string): string {
   // Replace URL-safe characters if they exist
@@ -88,6 +95,87 @@ class CustomPaginatorIntl extends MatPaginatorIntl {
 
 const BIDI_STREAMING_RESTART_WARNING =
   'Restarting bidirectional streaming is not currently supported. Please refresh the page or start a new session.';
+
+const THINKING_MODE_STORAGE_KEY = 'adk-web.thinkingMode';
+
+/** Display names for the root agent's platform tools (sub-agents). */
+const AGENT_TOOL_NAMES: Record<string, string> = {
+  sub_agent_slack: 'Slack',
+  sub_agent_gdrive: 'Google Drive',
+  sub_agent_asana: 'Asana',
+  sub_agent_backlog: 'Backlog',
+  sub_agent_github: 'GitHub',
+};
+
+/** Platform tools whose display name depends on the UI language. */
+const AGENT_TOOL_LABEL_KEYS: Record<string, MessageKey> = {
+  sub_agent_glossary: 'agent.glossary',
+  sub_agent_google_search: 'agent.googleSearch',
+};
+
+/** error_code ADK puts on the events that seal a run stopped by the client. */
+const INVOCATION_ABORTED = 'INVOCATION_ABORTED';
+
+/** Session state key the backend stores answer ratings under. */
+const MESSAGE_FEEDBACK_STATE_KEY = 'message_feedback';
+
+/** The system instruction of an LLM request (a string or a Content). */
+function systemInstructionText(request: any): string | null {
+  const instruction = request?.config?.system_instruction ?? request?.config?.systemInstruction;
+  if (typeof instruction === 'string') {
+    return instruction;
+  }
+  if (instruction?.parts) {
+    return instruction.parts.map((part: any) => part.text ?? '').join('\n');
+  }
+  return null;
+}
+
+/** Token counts summed over LLM calls (from the events' usage_metadata). */
+interface TokenUsage {
+  prompt: number;
+  cached: number;
+  output: number;
+  thoughts: number;
+  total: number;
+  calls: number;
+}
+
+/** How an agent or tool took part in a turn, in the flow diagram. */
+type FlowState = 'done' | 'running' | 'aborted';
+
+/** How many recent steps the collapsed activity panel keeps on screen. */
+const ACTIVITY_ROLLING_STEPS = 3;
+
+export interface ActivityStep {
+  /** Index of the message in `messages`, used to open the event detail. */
+  index: number;
+  kind: 'thought' | 'call' | 'response';
+  label: string;
+  detail?: string;
+  /** Thought text, shown in full when the panel is expanded. */
+  text?: string;
+  /** True for steps run inside a sub-agent (its own tool calls). */
+  nested: boolean;
+  /** The tool call was cut off by the stop button (sealed by ADK). */
+  aborted?: boolean;
+  /** A handoff to another agent (transfer_to_agent). */
+  transfer?: boolean;
+  /** Function call id, which is also the run id in the sub-agent's branch name. */
+  callId?: string;
+  /** For a root call to a sub-agent: the steps that sub-agent ran (its branch). */
+  children?: ActivityStep[];
+}
+
+export interface ActivityGroup {
+  start: number;
+  end: number;
+  /** All steps in order (rolling window, summary, stop state). */
+  steps: ActivityStep[];
+  /** Steps for the expanded view: each sub-agent's steps nested under the call that started it. */
+  tree: ActivityStep[];
+  summary: string;
+}
 
 @Component({
   selector: 'app-chat',
@@ -141,7 +229,33 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   redirectUri = URLUtil.getBaseUrlWithoutPath();
   showSidePanel = true;
   useSse = false;
+  readonly thinkingModeOptions: {value: ThinkingMode, label: MessageKey, tooltip: MessageKey}[] = [
+    {value: 'fast', label: 'mode.fast', tooltip: 'mode.fastTooltip'},
+    {value: 'standard', label: 'mode.standard', tooltip: 'mode.standardTooltip'},
+    {value: 'thinking', label: 'mode.thinking', tooltip: 'mode.thinkingTooltip'},
+  ];
+  thinkingMode: ThinkingMode = this.loadThinkingMode();
+  /** True while an agent response is streaming; swaps the send button for a stop button. */
+  isAgentResponding = signal(false);
+  readonly feedbackDirections: FeedbackDirection[] = ['up', 'down'];
+  /** The answer whose optional feedback comment box is open. */
+  feedbackCommentEventId: string | null = null;
+  feedbackNotice: {eventId: string, failed: boolean} | null = null;
+  private feedbackNoticeTimer?: ReturnType<typeof setTimeout>;
+  /** Ratings changed in this page, keyed `${sessionId}:${eventId}`; null = removed. */
+  private readonly feedbackOverrides = new Map<string, MessageFeedback | null>();
+  private tokenUsageCache: {events: Map<string, any> | null, byInvocation: Map<string, TokenUsage | null>} =
+      {events: null, byInvocation: new Map()};
+  /** HITL requests by call id, and the answers sent from this page. */
+  private readonly hitlRequests = new Map<string, HitlRequest>();
+  private readonly hitlAnswers = new Map<string, HitlResolution>();
+  /** Graphviz (viz.js) for the flow diagram in the activity panel, loaded on first use. */
+  private viz?: Awaited<ReturnType<typeof instance>>;
+  private readonly activityFlowCache = new Map<string, {svg: string, html: SafeHtml}>();
+  private activeSseSubscription?: Subscription;
   currentSessionState = {};
+  /** Every event of the session as stored (also state-only ones), for the developer tabs. */
+  sessionEvents: any[] = [];
   private hasInitializedAfterUserLoad = false;
   private readonly messagesSubject = new BehaviorSubject<any[]>([]);
   private readonly streamingTextMessageSubject =
@@ -164,6 +278,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   llmRequest: any = undefined;
   llmResponse: any = undefined;
   llmRequestKey = 'gcp.vertex.agent.llm_request';
+  /** The selected event's system instruction and the same agent's previous one (null: first call). */
+  systemInstructionDiff: {agent: string, current: string, previous: string | null} | null = null;
   llmResponseKey = 'gcp.vertex.agent.llm_response';
 
   getMediaTypeFromMimetype = getMediaTypeFromMimetype;
@@ -183,6 +299,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly userService = inject(UserService);
+  protected readonly i18n = inject(I18nService);
+  protected readonly themeService = inject(ThemeService);
+  protected readonly devMode = inject(DevModeService);
+  protected readonly logo = getLogoConfig();
 
   // Load apps
   private readonly agentService = inject(AgentService);
@@ -251,6 +371,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.document.title = this.logo.text;
     this.userService.userLoadError$.subscribe((error) => {
       this.userLoadingError.set(error);
     });
@@ -307,6 +428,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     combineLatest([
       this.agentService.getLoadingState(), this.isModelThinkingSubject
     ]).subscribe(([isLoading, isModelThinking]) => {
+      this.isAgentResponding.set(isLoading);
       const lastMessage = this.messages[this.messages.length - 1];
 
       if (isLoading) {
@@ -336,9 +458,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     this.traceService.selectedTraceRow$.subscribe(node => {
-      const eventId = node?.attributes['gcp.vertex.agent.event_id']
+      const eventId = node?.attributes?.['gcp.vertex.agent.event_id'];
       if (eventId && this.eventData.has(eventId)) {
         this.bottomPanelVisible = true;
+        // Trace tab: open the clicked span's event.
+        this.openEventDetails(eventId);
       } else {
         this.bottomPanelVisible = false;
       }
@@ -458,6 +582,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sessionService.createSession(this.userId, this.appName)
       .subscribe((res) => {
         this.currentSessionState = res.state;
+        this.sessionEvents = [];
         this.sessionId = res.id;
         this.sessionTab.refreshSession();
 
@@ -481,6 +606,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.scrollInterruptedSubject.next(false);
 
     event.preventDefault();
+    if (this.isAgentResponding()) return;
     if (!this.userInput.trim() && this.selectedFiles.length <= 0) return;
 
     if (event instanceof KeyboardEvent) {
@@ -515,6 +641,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         'parts': await this.getUserMessageParts(),
       },
       streaming: this.useSse,
+      thinkingMode: this.thinkingMode,
     };
     this.selectedFiles = [];
     this.runSseWithAuthRetry(req);
@@ -531,7 +658,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.streamingTextMessage = null;
     let sessionBriefRefreshQueued = false;
     const authRetryCount = options?.authRetryCount ?? 0;
-    this.agentService.runSse(req).subscribe({
+    const subscription: Subscription = this.agentService.runSse(req).subscribe({
       next: async (chunk) => {
         const chunkJson = JSON.parse(chunk);
         if (chunkJson.error) {
@@ -581,27 +708,247 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         }
         this.changeDetectorRef.detectChanges();
       },
-      error: (err) => console.error('SSE error:', err),
+      error: (err) => {
+        this.clearActiveSseSubscription(subscription);
+        console.error('SSE error:', err);
+      },
       complete: () => {
+        // An auth retry may already have started the next request; keep that one.
+        this.clearActiveSseSubscription(subscription);
         this.streamingTextMessage = null;
         if (sessionBriefRefreshQueued) {
           this.requestSessionBriefRefresh();
         }
-        this.eventService.getTrace(this.sessionId)
-            .pipe(catchError((error) => {
-              if (error.status === 404) {
-                return of(null);
-              }
-              return of([]);
-            }))
-            .subscribe(res => {
-              this.traceData = res;
-              this.changeDetectorRef.detectChanges();
-            });
-        this.traceService.setMessages(this.messages);
-        this.refreshSessionStateFromServer();
+        this.syncAfterAgentRun();
       },
     });
+    this.activeSseSubscription = subscription;
+  }
+
+  /** The user's rating of an answer: changed here, or saved in the session state. */
+  feedbackFor(eventId: string): MessageFeedback | undefined {
+    const key = `${this.sessionId}:${eventId}`;
+    if (this.feedbackOverrides.has(key)) {
+      return this.feedbackOverrides.get(key) ?? undefined;
+    }
+    return (this.currentSessionState as any)?.[MESSAGE_FEEDBACK_STATE_KEY]?.[eventId];
+  }
+
+  /** Rating buttons go under the last text of each finished answer. */
+  showsFeedback(i: number): boolean {
+    const message = this.messages[i];
+    if (this.isEvalEditMode() || message?.role !== 'bot' || !message.text ||
+        !message.eventId || message.thought || message.stopped || message.isLoading ||
+        message.functionCall || message.functionResponse) {
+      return false;
+    }
+    const next = this.messages[i + 1];
+    if (next) {
+      return next.role !== 'bot';
+    }
+    return !this.isAgentResponding();
+  }
+
+  toggleFeedback(eventId: string, direction: FeedbackDirection) {
+    if (this.feedbackFor(eventId)?.direction === direction) {
+      this.feedbackCommentEventId = null;
+      this.saveFeedback(eventId, null);
+      return;
+    }
+    this.saveFeedback(eventId, {direction});
+    this.feedbackCommentEventId = eventId;
+    setTimeout(() => {
+      this.hostElementRef.nativeElement.querySelector('.feedback-comment')?.focus();
+    });
+  }
+
+  sendFeedbackComment(eventId: string, comment: string) {
+    const direction = this.feedbackFor(eventId)?.direction;
+    this.feedbackCommentEventId = null;
+    if (!direction) {
+      return;
+    }
+    this.saveFeedback(eventId, {direction, comment: comment.trim() || undefined}, true);
+  }
+
+  private saveFeedback(
+      eventId: string, feedback: MessageFeedback | null, showThanks = false) {
+    const key = `${this.sessionId}:${eventId}`;
+    this.feedbackOverrides.set(key, feedback);
+    const request: Observable<unknown> = feedback ?
+        this.sessionService.putMessageFeedback(
+            this.userId, this.appName, this.sessionId, eventId, feedback) :
+        this.sessionService.deleteMessageFeedback(
+            this.userId, this.appName, this.sessionId, eventId);
+    request.subscribe({
+      next: () => {
+        if (showThanks) {
+          this.showFeedbackNotice(eventId, false);
+        }
+      },
+      error: () => {
+        // Fall back to what the server has.
+        this.feedbackOverrides.delete(key);
+        this.feedbackCommentEventId = null;
+        this.showFeedbackNotice(eventId, true);
+      },
+    });
+  }
+
+  private showFeedbackNotice(eventId: string, failed: boolean) {
+    clearTimeout(this.feedbackNoticeTimer);
+    this.feedbackNotice = {eventId, failed};
+    this.feedbackNoticeTimer = setTimeout(() => {
+      this.feedbackNotice = null;
+      this.changeDetectorRef.markForCheck();
+    }, 3000);
+    this.changeDetectorRef.markForCheck();
+  }
+
+  /**
+   * Compares the system instruction of the selected event's LLM call with the
+   * same agent's previous call (from their traces).
+   */
+  private compareSystemInstruction(event: any, request: any) {
+    const current = systemInstructionText(request);
+    if (current === null) {
+      return;
+    }
+    const events = [...this.eventData.values()];
+    const index = events.findIndex((candidate) => candidate.id === event.id);
+    const previous = events.slice(0, Math.max(0, index)).reverse().find(
+        (candidate) => candidate.author === event.author && candidate.usageMetadata);
+    if (!previous) {
+      this.systemInstructionDiff = {agent: event.author, current, previous: null};
+      return;
+    }
+    this.eventService.getEventTrace(previous.id).subscribe({
+      next: (res) => {
+        if (this.selectedEvent?.id !== event.id) {
+          return;
+        }
+        let previousText: string | null = null;
+        try {
+          previousText = systemInstructionText(JSON.parse(res[this.llmRequestKey]));
+        } catch {}
+        this.systemInstructionDiff = previousText === null ? null :
+            {agent: event.author, current, previous: previousText};
+        this.changeDetectorRef.markForCheck();
+      },
+      // The previous call's trace is gone (e.g. the server restarted).
+      error: () => {},
+    });
+  }
+
+  openInstructionDiff() {
+    const diff = this.systemInstructionDiff;
+    if (diff?.previous == null) {
+      return;
+    }
+    this.dialog.open(InstructionDiffDialogComponent, {
+      width: '900px',
+      maxWidth: '95vw',
+      panelClass: 'light-dialog',
+      data: {agent: diff.agent, previous: diff.previous, current: diff.current},
+    });
+  }
+
+  invocationOf(eventId: string | undefined): string | undefined {
+    return eventId ? this.eventData.get(eventId)?.invocationId : undefined;
+  }
+
+  /**
+   * Token usage of the LLM calls in one turn (an invocation, including its
+   * sub-agents' calls) or, without an id, in the whole session.
+   */
+  tokenUsage(invocationId?: string): TokenUsage | null {
+    if (this.tokenUsageCache.events !== this.eventData) {
+      this.tokenUsageCache = {events: this.eventData, byInvocation: new Map()};
+    }
+    const key = invocationId ?? '';
+    const cached = this.tokenUsageCache.byInvocation.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const usage: TokenUsage = {prompt: 0, cached: 0, output: 0, thoughts: 0, total: 0, calls: 0};
+    for (const event of this.eventData.values()) {
+      const metadata = event.usageMetadata;
+      if (!metadata || (invocationId && event.invocationId !== invocationId)) {
+        continue;
+      }
+      usage.prompt += metadata.promptTokenCount ?? 0;
+      usage.cached += metadata.cachedContentTokenCount ?? 0;
+      usage.output += metadata.candidatesTokenCount ?? 0;
+      usage.thoughts += metadata.thoughtsTokenCount ?? 0;
+      usage.total += metadata.totalTokenCount ?? 0;
+      usage.calls += 1;
+    }
+    const result = usage.calls ? usage : null;
+    this.tokenUsageCache.byInvocation.set(key, result);
+    return result;
+  }
+
+  usageTooltip(usage: TokenUsage): string {
+    return this.i18n.t('usage.tooltip', {
+      prompt: this.formatTokens(usage.prompt),
+      cached: this.formatTokens(usage.cached),
+      output: this.formatTokens(usage.output),
+      thoughts: this.formatTokens(usage.thoughts),
+      total: this.formatTokens(usage.total),
+      calls: usage.calls,
+    });
+  }
+
+  formatTokens(count: number): string {
+    return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
+  }
+
+  /** Stop button: abort the running response; the backend stops the agent run. */
+  stopAgentResponse() {
+    if (!this.abortActiveSse()) {
+      return;
+    }
+    this.isModelThinkingSubject.next(false);
+    this.streamingTextMessage = null;
+    this.insertMessageBeforeLoadingMessage(this.stoppedNoticeMessage());
+    this.changeDetectorRef.detectChanges();
+    this.syncAfterAgentRun();
+  }
+
+  private stoppedNoticeMessage() {
+    return {role: 'bot', text: '回答を停止しました。', stopped: true};
+  }
+
+  private abortActiveSse(): boolean {
+    if (!this.activeSseSubscription) {
+      return false;
+    }
+    this.activeSseSubscription.unsubscribe();
+    this.activeSseSubscription = undefined;
+    return true;
+  }
+
+  private clearActiveSseSubscription(subscription: Subscription) {
+    if (this.activeSseSubscription === subscription) {
+      this.activeSseSubscription = undefined;
+    }
+  }
+
+  /** Reload trace, messages for the trace view, and state after a run ends or is stopped. */
+  private syncAfterAgentRun() {
+    this.eventService.getTrace(this.sessionId)
+        .pipe(catchError((error) => {
+          if (error.status === 404) {
+            return of(null);
+          }
+          return of([]);
+        }))
+        .subscribe(res => {
+          this.traceData = res;
+          this.changeDetectorRef.detectChanges();
+        });
+    this.traceService.setMessages(this.messages);
+    this.refreshSessionStateFromServer();
   }
 
   private async startAsanaOAuthPopupAndWait(authUrlRaw: string): Promise<boolean> {
@@ -1246,32 +1593,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.refreshSessionStateFromServer();
   }
 
-  openDialog(): void {
-    const dialogRef = this.dialog.open(PendingEventDialogComponent, {
-      width: '600px',
-      data: {
-        event: this.longRunningEvents[0],
-        appName: this.appName,
-        userId: this.userId,
-        sessionId: this.sessionId,
-        functionCallEventId: this.functionCallEventId,
-      },
-    });
-
-    dialogRef.afterClosed().subscribe((t) => {
-      if (t) {
-        this.removeFinishedLongRunningEvents(t.events);
-        this.processRunSseResponse(t.response);
-      }
-    });
-  }
-
-  removeFinishedLongRunningEvents(finishedEvents: any[]) {
-    const idsToExclude = new Set(finishedEvents.map((obj: any) => obj.id));
-    this.longRunningEvents =
-      this.longRunningEvents.filter(obj => !idsToExclude.has(obj.id));
-  }
-
   getAgentNameFromEvent(i: number) {
     const key = this.messages[i].eventId;
     const selectedEvent = this.eventData.get(key);
@@ -1295,16 +1616,30 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   clickEvent(i: number) {
-    const key = this.messages[i].eventId;
+    this.openEventDetails(this.messages[i]?.eventId);
+  }
+
+  /**
+   * Opens the event detail panel. Also for events not shown as a message
+   * (e.g. a sub-agent's own text), as opened from the trace / state tabs.
+   */
+  openEventDetails(key: string | undefined) {
+    // Client-side messages such as the stop notice have no event to show.
+    if (!key || !this.eventData.has(key)) {
+      return;
+    }
 
     this.sideDrawer.open();
     this.showSidePanel = true;
     this.selectedEvent = this.eventData.get(key);
     this.selectedEventIndex = this.getIndexOfKeyInMap(key);
 
+    this.systemInstructionDiff = null;
+    const selected = this.selectedEvent;
     this.eventService.getEventTrace(this.selectedEvent.id).subscribe((res) => {
       this.llmRequest = JSON.parse(res[this.llmRequestKey]);
       this.llmResponse = JSON.parse(res[this.llmResponseKey]);
+      this.compareSystemInstruction(selected, this.llmRequest);
     });
 
     this.eventService
@@ -1335,6 +1670,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.abortActiveSse();
     this.webSocketService.closeConnection();
   }
 
@@ -1495,6 +1831,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.traceService.resetTraceService();
     this.sessionId = session.id;
     this.currentSessionState = session.state;
+    this.sessionEvents = session.events ?? [];
     this.evalCase = null;
     this.isChatMode.set(true);
 
@@ -1506,8 +1843,21 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.resetEventsAndMessages();
     let index = 0;
+    // A turn stopped with the stop button ends with ADK's INVOCATION_ABORTED
+    // events; show the same stop notice as when it was stopped live.
+    let abortedInvocationId: string | null = null;
+    const addStoppedNotice = () => {
+      if (abortedInvocationId) {
+        this.messages.push(this.stoppedNoticeMessage());
+        this.messagesSubject.next(this.messages);
+        abortedInvocationId = null;
+      }
+    };
 
     session.events.forEach((event: any) => {
+      if (abortedInvocationId && event.invocationId !== abortedInvocationId) {
+        addStoppedNotice();
+      }
       event.content?.parts?.forEach((part: any) => {
         if (part.text && this.isDelegatedSubAgentEvent(event)) {
           this.eventMessageIndexArray[index] = part.text;
@@ -1520,7 +1870,11 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           this.storeEvents(part, event, index);
         }
       });
+      if (event.errorCode === INVOCATION_ABORTED) {
+        abortedInvocationId = event.invocationId;
+      }
     });
+    addStoppedNotice();
 
     this.eventService.getTrace(this.sessionId).subscribe(res => {
       this.traceData = res;
@@ -1752,6 +2106,550 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedFiles.splice(index, 1);
   }
 
+  private activityLayoutCache: {
+    messages: any[],
+    language: Language,
+    length: number,
+    first: any,
+    last: any,
+    groups: Map<number, ActivityGroup>,
+    hidden: Set<number>,
+  } | null = null;
+
+  /**
+   * Groups consecutive thoughts / tool calls / tool results into one activity
+   * panel, keyed by the index of the group's first message. The other messages
+   * of the group are hidden from the flat list.
+   */
+  private activityLayout() {
+    const messages = this.messages;
+    const language = this.i18n.language();
+    const cache = this.activityLayoutCache;
+    if (cache && cache.messages === messages && cache.language === language &&
+        cache.length === messages.length &&
+        cache.first === messages[0] && cache.last === messages[messages.length - 1]) {
+      return cache;
+    }
+
+    const groups = new Map<number, ActivityGroup>();
+    const hidden = new Set<number>();
+    let current: ActivityGroup | null = null;
+    messages.forEach((message, i) => {
+      if (!this.isActivityMessage(message)) {
+        current = null;
+        return;
+      }
+      if (!current) {
+        current = {start: i, end: i, steps: [], tree: [], summary: ''};
+        groups.set(i, current);
+      } else {
+        hidden.add(i);
+      }
+      current.end = i;
+      current.steps.push(this.toActivityStep(message, i));
+    });
+    groups.forEach((group) => {
+      group.tree = this.activityTree(group.steps);
+      group.summary = this.activitySummary(group);
+    });
+
+    this.activityLayoutCache = {
+      messages,
+      language,
+      length: messages.length,
+      first: messages[0],
+      last: messages[messages.length - 1],
+      groups,
+      hidden,
+    };
+    return this.activityLayoutCache;
+  }
+
+  /**
+   * Nests each sub-agent's steps under the root call that started it. A
+   * single_turn sub-agent runs in branch `<agent>@<function call id>`, so
+   * parallel searches no longer interleave in the expanded view.
+   */
+  private activityTree(steps: ActivityStep[]): ActivityStep[] {
+    const callsById = new Map<string, ActivityStep>();
+    const tree: ActivityStep[] = [];
+    for (const step of steps) {
+      const parent = step.nested ? callsById.get(this.branchRunId(step) ?? '') : undefined;
+      if (parent) {
+        parent.children = [...(parent.children ?? []), step];
+        continue;
+      }
+      if (step.kind === 'call' && step.callId && !step.nested) {
+        callsById.set(step.callId, step);
+      }
+      tree.push(step);
+    }
+    return tree;
+  }
+
+  /** The run id of the sub-agent branch a step ran in (the part after the last `@`). */
+  private branchRunId(step: ActivityStep): string | undefined {
+    const branch: string | undefined = this.eventData.get(this.messages[step.index]?.eventId)?.branch;
+    const segment = branch?.split('.').reverse().find((part) => part.includes('@'));
+    return segment?.slice(segment.lastIndexOf('@') + 1);
+  }
+
+  /** Display name of a platform tool (sub-agent), or undefined for other tools. */
+  private platformLabel(toolName: string | undefined): string | undefined {
+    if (!toolName) {
+      return undefined;
+    }
+    const key = AGENT_TOOL_LABEL_KEYS[toolName];
+    return key ? this.i18n.t(key) : AGENT_TOOL_NAMES[toolName];
+  }
+
+  /** Display name of an agent: platform label for sub-agents, "assistant" for the root. */
+  agentDisplayName(agentName: string | undefined): string {
+    if (!agentName) {
+      return '';
+    }
+    return this.platformLabel(agentName) ??
+        (agentName === this.appName ? this.i18n.t('agent.assistant') : agentName);
+  }
+
+  /** Label for answers written by an agent the root handed the chat over to. */
+  answeringAgentLabel(i: number): string | undefined {
+    if (this.messages[i]?.stopped) {
+      return undefined;
+    }
+    return this.platformLabel(this.getAgentNameFromEvent(i));
+  }
+
+  private isActivityMessage(message: any): boolean {
+    // Requests waiting on the user get their own card instead.
+    return message?.role === 'bot' && !this.hitlRequestOf(message) &&
+        !!(message.thought || message.functionCall || message.functionResponse);
+  }
+
+  /** The approval / input / manual result the call at message `i` waits for. */
+  hitlRequestAt(i: number): HitlRequest | null {
+    const message = this.messages[i];
+    return message?.role === 'bot' ? this.hitlRequestOf(message) : null;
+  }
+
+  private hitlRequestOf(message: any): HitlRequest | null {
+    const call = message?.functionCall;
+    if (!call?.id) {
+      return null;
+    }
+    // Cached so the card keeps the same input (and its form state) across checks.
+    const cached = this.hitlRequests.get(call.id);
+    if (cached) {
+      return cached;
+    }
+    const request = getHitlRequest(
+        call, this.eventData.get(message.eventId)?.longRunningToolIds);
+    if (request) {
+      this.hitlRequests.set(call.id, request);
+    }
+    return request;
+  }
+
+  /** The user's function responses are shown on the request card, not as messages. */
+  isHitlResponseMessage(message: any): boolean {
+    return message?.role === 'user' && !!message.functionResponse;
+  }
+
+  hitlResolution(request: HitlRequest): HitlResolution | null {
+    const answered = this.hitlAnswers.get(request.callId);
+    if (answered) {
+      return answered;
+    }
+    const message = this.messages.find((m) =>
+        m.role === 'user' && m.functionResponse?.id === request.callId);
+    if (!message) {
+      return null;
+    }
+    const response = message.functionResponse.response ?? {};
+    const resolution = {confirmed: response.confirmed, response};
+    this.hitlAnswers.set(request.callId, resolution);
+    return resolution;
+  }
+
+  /** The user moved on (sent a new message) without answering the request. */
+  isHitlExpired(i: number, request: HitlRequest): boolean {
+    return !this.hitlResolution(request) &&
+        this.messages.slice(i + 1).some((m) => m.role === 'user' && m.text);
+  }
+
+  /** What a long-running tool returned so far, to start the manual result from. */
+  hitlInterimResponse(request: HitlRequest): unknown {
+    return this.messages.find((m) =>
+        m.role === 'bot' && m.functionResponse?.id === request.callId)
+        ?.functionResponse.response;
+  }
+
+  respondToHitl(request: HitlRequest, response: Record<string, unknown>) {
+    if (this.isAgentResponding()) {
+      return;
+    }
+    this.hitlAnswers.set(request.callId, {
+      confirmed: response['confirmed'] as boolean | undefined,
+      response,
+    });
+    this.scrollInterruptedSubject.next(false);
+    const req: AgentRunRequest = {
+      appName: this.appName,
+      userId: this.userId,
+      sessionId: this.sessionId,
+      newMessage: {
+        role: 'user',
+        parts: [{
+          function_response: {
+            id: request.callId,
+            name: request.callName,
+            response,
+          },
+        }],
+      },
+      streaming: this.useSse,
+      thinkingMode: this.thinkingMode,
+    };
+    this.runSseWithAuthRetry(req);
+  }
+
+  private toActivityStep(message: any, index: number): ActivityStep {
+    const event = this.eventData.get(message.eventId);
+    const nested = this.isDelegatedSubAgentEvent(event);
+    if (message.thought) {
+      return {
+        index,
+        kind: 'thought',
+        label: this.thoughtTitle(message.text) || this.i18n.t('activity.thinking'),
+        text: message.text,
+        nested,
+      };
+    }
+    const call = message.functionCall;
+    if (call) {
+      const args = call.args ?? {};
+      const callId = call.id;
+      const platform = this.platformLabel(call.name);
+      if (platform) {
+        return {index, kind: 'call', label: this.i18n.t('activity.search', {platform}), detail: args.request, nested, callId};
+      }
+      if (call.name === 'transfer_to_agent') {
+        const agent = this.agentDisplayName(args.agent_name);
+        return {index, kind: 'call', label: this.i18n.t('activity.switch', {agent}), nested, callId};
+      }
+      return {index, kind: 'call', label: call.name, detail: this.compactArgs(args), nested, callId};
+    }
+    const response = message.functionResponse;
+    const error = response?.response?.error;
+    if (error === APPROVAL_REQUESTED_ERROR || error === REJECTED_ERROR) {
+      return {
+        index,
+        kind: 'response',
+        label: this.i18n.t(
+            error === REJECTED_ERROR ? 'activity.rejectedCall' : 'activity.awaitingApproval',
+            {name: this.platformLabel(response.name) ?? response.name}),
+        nested,
+        aborted: error === REJECTED_ERROR,
+      };
+    }
+    const transferTarget = event?.actions?.transferToAgent;
+    if (transferTarget) {
+      return {
+        index,
+        kind: 'response',
+        label: `${this.agentDisplayName(event.author)} → ${this.agentDisplayName(transferTarget)}`,
+        nested,
+        transfer: true,
+      };
+    }
+    const platform = this.platformLabel(response?.name);
+    const name = response?.name;
+    if (event?.errorCode === INVOCATION_ABORTED) {
+      return {
+        index,
+        kind: 'response',
+        label: platform ? this.i18n.t('activity.searchAborted', {platform}) :
+                          this.i18n.t('activity.aborted', {name}),
+        nested,
+        aborted: true,
+      };
+    }
+    return {
+      index,
+      kind: 'response',
+      label: platform ? this.i18n.t('activity.searchDone', {platform}) :
+                        this.i18n.t('activity.done', {name}),
+      nested,
+    };
+  }
+
+  private compactArgs(args: any): string | undefined {
+    const text = JSON.stringify(args);
+    if (!text || text === '{}') {
+      return undefined;
+    }
+    return text.length > 120 ? `${text.slice(0, 117)}...` : text;
+  }
+
+  private activitySummary(group: ActivityGroup): string {
+    const platforms = [...new Set(group.steps
+        .filter((step) => step.kind === 'call' && !step.nested)
+        .map((step) => this.platformLabel(this.messages[step.index]?.functionCall?.name))
+        .filter((label) => !!label))];
+    const steps = this.i18n.t('activity.steps', {count: group.steps.length});
+    if (platforms.length > 0) {
+      const separator = this.i18n.t('activity.platformSeparator');
+      return this.i18n.t('activity.summarySearch', {platforms: platforms.join(separator), steps});
+    }
+    if (group.steps.every((step) => step.kind === 'thought')) {
+      return this.i18n.t('activity.summaryThought', {steps});
+    }
+    return this.i18n.t('activity.summaryOther', {steps});
+  }
+
+  /** The activity group that starts at message `i`, if any. */
+  activityGroupAt(i: number): ActivityGroup | undefined {
+    if (this.isEvalEditMode()) {
+      return undefined;
+    }
+    return this.activityLayout().groups.get(i);
+  }
+
+  /** True for messages folded into an activity panel that starts earlier. */
+  isHiddenInActivity(i: number): boolean {
+    if (this.isEvalEditMode()) {
+      return false;
+    }
+    return this.activityLayout().hidden.has(i);
+  }
+
+  /** The agent is still working on this group: only the loading placeholder follows it. */
+  isActivityRunning(group: ActivityGroup): boolean {
+    const after = this.messages.slice(group.end + 1);
+    return after.length > 0 && after.every((message) => message.isLoading);
+  }
+
+  /** The user pressed stop while this group was running (live, or sealed by ADK on reload). */
+  isActivityStopped(group: ActivityGroup): boolean {
+    return !!this.messages[group.end + 1]?.stopped ||
+        group.steps.some((step) => step.aborted);
+  }
+
+  rollingActivitySteps(group: ActivityGroup): ActivityStep[] {
+    return group.steps.slice(-ACTIVITY_ROLLING_STEPS);
+  }
+
+  isActivityExpanded(group: ActivityGroup): boolean {
+    return !!this.messages[group.start]?.activityExpanded;
+  }
+
+  toggleActivity(group: ActivityGroup) {
+    const first = this.messages[group.start];
+    if (first) {
+      first.activityExpanded = !first.activityExpanded;
+    }
+  }
+
+  isActivityFlowOpen(group: ActivityGroup): boolean {
+    return !!this.messages[group.start]?.activityFlowOpen;
+  }
+
+  toggleActivityFlow(group: ActivityGroup) {
+    const first = this.messages[group.start];
+    if (!first) {
+      return;
+    }
+    first.activityFlowOpen = !first.activityFlowOpen;
+    if (!this.viz) {
+      instance().then((viz) => {
+        this.viz = viz;
+        this.changeDetectorRef.markForCheck();
+      });
+    }
+  }
+
+  /**
+   * The turn as a workflow, in the order it ran: the question, each round of
+   * the root agent deciding what to do, the calls it made (side by side when
+   * parallel, each with the sub-agent's own tool calls in its lane), and the
+   * answer. Nodes still waiting for a result are drawn as running.
+   * Null until Graphviz (viz.js) is loaded.
+   */
+  activityFlowHtml(group: ActivityGroup): SafeHtml | null {
+    return this.activityFlow(group)?.html ?? null;
+  }
+
+  openActivityFlow(group: ActivityGroup) {
+    const flow = this.activityFlow(group);
+    if (flow) {
+      this.openViewImageDialog(flow.svg);
+    }
+  }
+
+  private activityFlow(group: ActivityGroup): {svg: string, html: SafeHtml} | null {
+    if (!this.viz) {
+      return null;
+    }
+    const dot = this.flowDot(group);
+    let cached = this.activityFlowCache.get(dot);
+    if (!cached) {
+      if (this.activityFlowCache.size > 100) {
+        this.activityFlowCache.clear();
+      }
+      const svg = this.viz.renderString(dot, {format: 'svg', engine: 'dot'})
+          .replace('<svg ', '<svg class="flow-graph" ');
+      cached = {svg, html: this.sanitizer.bypassSecurityTrustHtml(svg)};
+      this.activityFlowCache.set(dot, cached);
+    }
+    return cached;
+  }
+
+  /** Graphviz DOT of the turn's workflow; states go in `class` attributes (styles.scss). */
+  private flowDot(group: ActivityGroup): string {
+    const running = this.isActivityRunning(group);
+    const stopped = this.isActivityStopped(group);
+    // Result of every call in the turn, by call id.
+    const results = new Map<string, FlowState>();
+    for (const step of group.steps) {
+      const message = this.messages[step.index];
+      const response = message?.functionResponse;
+      if (response?.id) {
+        const aborted = this.eventData.get(message.eventId)?.errorCode === INVOCATION_ABORTED ||
+            response.response?.error === REJECTED_ERROR;
+        results.set(response.id, aborted ? 'aborted' : 'done');
+      }
+    }
+    const callState = (step: ActivityStep): FlowState =>
+        (step.callId && results.get(step.callId)) ||
+        (running ? 'running' : stopped ? 'aborted' : 'done');
+
+    // Rounds: the calls one model response made (they share an event), with
+    // the thoughts that led to them.
+    type Round = {eventId?: string, thoughts: string[], calls: ActivityStep[]};
+    const rounds: Round[] = [];
+    let thoughts: string[] = [];
+    for (const step of group.tree) {
+      if (step.kind === 'thought') {
+        thoughts.push(step.label);
+      } else if (step.kind === 'call') {
+        const eventId = this.messages[step.index]?.eventId;
+        let round = rounds[rounds.length - 1];
+        if (!round || round.eventId !== eventId || thoughts.length) {
+          round = {eventId, thoughts, calls: []};
+          rounds.push(round);
+          thoughts = [];
+        }
+        round.calls.push(step);
+      }
+    }
+    if (thoughts.length) {
+      rounds.push({thoughts, calls: []});
+    }
+
+    const quote = (text: string) =>
+        `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+    const short = (text: string, max = 24) => text.length > max ? `${text.slice(0, max - 1)}…` : text;
+    const lines: string[] = [];
+    let count = 0;
+    const node = (label: string, kind: string, state: FlowState, attrs = '') => {
+      const id = `n${count++}`;
+      lines.push(`  ${id} [label=${quote(label)} class="flow-${kind} flow-${state}"${attrs}]`);
+      return id;
+    };
+    const edge = (from: string, to: string, state: FlowState) =>
+        lines.push(`  ${from} -> ${to} [class="flow-${state}"]`);
+
+    let previous = [node(this.i18n.t('flow.question'), 'start', 'done', ' shape=ellipse')];
+    rounds.forEach((round, i) => {
+      const last = i === rounds.length - 1;
+      const thinking = last && running && round.calls.length === 0;
+      const label = this.i18n.t('flow.decide') +
+          (round.thoughts.length ? `\n${short(round.thoughts[round.thoughts.length - 1])}` : '');
+      const decide = node(label, 'round', thinking ? 'running' : 'done');
+      previous.forEach((from) => edge(from, decide, thinking ? 'running' : 'done'));
+      if (!round.calls.length) {
+        previous = [decide];
+        return;
+      }
+      previous = round.calls.map((call) => {
+        const state = callState(call);
+        lines.push(`  subgraph cluster_${count} {`);
+        lines.push(`  class="flow-lane flow-${state}" style=rounded label=""`);
+        const callNode = node(short(call.label, 28), 'call', state);
+        let tail = callNode;
+        for (const child of call.children ?? []) {
+          if (child.kind !== 'call') {
+            continue;
+          }
+          const childState = callState(child);
+          const toolNode = node(short(child.label, 28), 'tool', childState);
+          edge(tail, toolNode, childState);
+          tail = toolNode;
+        }
+        lines.push('  }');
+        edge(decide, callNode, state);
+        return tail;
+      });
+    });
+
+    const lastRound = rounds[rounds.length - 1];
+    const after = this.messages[group.end + 1];
+    if (stopped) {
+      const end = node(this.i18n.t('flow.stopped'), 'end', 'aborted', ' shape=ellipse');
+      previous.forEach((from) => edge(from, end, 'aborted'));
+    } else if (running) {
+      // The calls came back and the root is deciding again or writing the answer.
+      if (lastRound?.calls.length && lastRound.calls.every((call) => callState(call) !== 'running')) {
+        const next = node(this.i18n.t('flow.thinking'), 'round', 'running');
+        previous.forEach((from) => edge(from, next, 'running'));
+      }
+    } else if (after?.role === 'bot' && !after.thought) {
+      const answer = node(this.i18n.t('flow.answer'), 'end', 'done', ' shape=ellipse');
+      previous.forEach((from) => edge(from, answer, 'done'));
+    }
+
+    return [
+      'digraph {',
+      '  graph [rankdir=TB bgcolor=transparent nodesep=0.3 ranksep=0.35]',
+      '  node [shape=box style="rounded" fontname="Helvetica" fontsize=11 margin="0.18,0.06" height=0.3]',
+      '  edge [arrowsize=0.6]',
+      ...lines,
+      '}',
+    ].join('\n');
+  }
+
+
+  /** First line of a thought summary (e.g. "**Planning the search**"), shown while collapsed. */
+  thoughtTitle(text: string | undefined): string {
+    const firstLine = (text ?? '').trim().split('\n')[0] ?? '';
+    return firstLine.replace(/^\*\*(.+)\*\*$/, '$1').trim();
+  }
+
+  thinkingModeIndex(): number {
+    return Math.max(0, this.thinkingModeOptions.findIndex((option) => option.value === this.thinkingMode));
+  }
+
+  setThinkingMode(mode: ThinkingMode) {
+    this.thinkingMode = mode;
+    try {
+      localStorage.setItem(THINKING_MODE_STORAGE_KEY, mode);
+    } catch {
+      // Storage can be unavailable (e.g. private mode); the choice still applies to this page.
+    }
+  }
+
+  private loadThinkingMode(): ThinkingMode {
+    try {
+      const stored = localStorage.getItem(THINKING_MODE_STORAGE_KEY);
+      if (stored === 'fast' || stored === 'standard' || stored === 'thinking') {
+        return stored;
+      }
+    } catch {
+      // Fall back to the default below.
+    }
+    return 'standard';
+  }
+
   toggleSse() {
     this.useSse = !this.useSse;
   }
@@ -1759,9 +2657,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   selectEvent(key: string) {
     this.selectedEvent = this.eventData.get(key);
     this.selectedEventIndex = this.getIndexOfKeyInMap(key);
+    this.systemInstructionDiff = null;
+    const selected = this.selectedEvent;
     this.eventService.getEventTrace(this.selectedEvent.id).subscribe((res) => {
       this.llmRequest = JSON.parse(res[this.llmRequestKey]);
       this.llmResponse = JSON.parse(res[this.llmResponseKey]);
+      this.compareSystemInstruction(selected, this.llmRequest);
     });
     this.eventService
       .getEvent(
@@ -1960,6 +2861,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
               return;
             }
             this.currentSessionState = session.state ?? {};
+            this.sessionEvents = session.events ?? [];
             this.changeDetectorRef.detectChanges();
           },
           error: (error) => {

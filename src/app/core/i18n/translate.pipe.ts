@@ -1,4 +1,5 @@
 /**
+ * @license
  * Copyright 2025 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,12 +15,24 @@
  * limitations under the License.
  */
 
-.response-textarea {
-  min-width: 500px;
-  margin-top: 15px;
-}
+import {inject, Pipe, PipeTransform} from '@angular/core';
 
-.dialog-title {
-  font-weight: bold;
-  font-size: large;
+import {I18nService} from './i18n.service';
+import {MessageKey} from './messages';
+
+/**
+ * `{{ 'chat.send' | t }}`. Impure so templates update when the language
+ * changes; the lookup is a map read, so re-running it is cheap.
+ */
+@Pipe({
+  name: 't',
+  standalone: false,
+  pure: false,
+})
+export class TranslatePipe implements PipeTransform {
+  private readonly i18n = inject(I18nService);
+
+  transform(key: MessageKey, params?: Record<string, string|number>): string {
+    return this.i18n.t(key, params);
+  }
 }

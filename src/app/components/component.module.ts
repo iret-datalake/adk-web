@@ -28,6 +28,7 @@ import {MatExpansionModule} from '@angular/material/expansion';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatIconModule} from '@angular/material/icon';
 import {MatInputModule} from '@angular/material/input';
+import {MatMenuModule} from '@angular/material/menu';
 import {MatListModule} from '@angular/material/list';
 import {MatPaginatorModule} from '@angular/material/paginator';
 import {MatProgressBarModule} from '@angular/material/progress-bar';
@@ -44,6 +45,8 @@ import {BrowserAnimationsModule} from '@angular/platform-browser/animations';
 import {NgxJsonViewerModule} from 'ngx-json-viewer';
 import {MarkdownModule} from 'ngx-markdown';
 
+import {TranslatePipe} from '../core/i18n/translate.pipe';
+import {MarkdownEnhanceDirective} from '../directives/markdown-enhance.directive';
 import {ResizableBottomDirective} from '../directives/resizable-bottom.directive';
 import {ResizableDrawerDirective} from '../directives/resizable-drawer.directive';
 
@@ -57,10 +60,12 @@ import {NewEvalSetDialogComponentComponent} from './eval-tab/new-eval-set-dialog
 import {RunEvalConfigDialogComponent} from './eval-tab/run-eval-config-dialog/run-eval-config-dialog.component';
 import {EventTabComponent} from './event-tab/event-tab.component';
 import {TraceChartComponent} from './event-tab/trace-chart/trace-chart.component';
+import {HitlRequestComponent} from './hitl-request/hitl-request.component';
+import {InstructionDiffDialogComponent} from './instruction-diff-dialog/instruction-diff-dialog.component';
 import {JsonEditorComponent} from './json-editor/json-editor.component';
-import {PendingEventDialogComponent} from './pending-event-dialog/pending-event-dialog.component';
 import {DeleteSessionDialogComponent} from './session-tab/delete-session-dialog/delete-session-dialog.component';
 import {SessionTabComponent} from './session-tab/session-tab.component';
+import {StateHistoryComponent} from './state-history/state-history.component';
 import {StateTabComponent} from './state-tab/state-tab.component';
 import {TraceEventComponent} from './trace-tab/trace-event/trace-event.component';
 import {TraceTabComponent} from './trace-tab/trace-tab.component';
@@ -69,7 +74,6 @@ import {ViewImageDialogComponent} from './view-image-dialog/view-image-dialog.co
 
 const COMPONENTS = [
   ChatComponent,
-  PendingEventDialogComponent,
   EventTabComponent,
   SessionTabComponent,
   EvalTabComponent,
@@ -78,6 +82,7 @@ const COMPONENTS = [
   ArtifactTabComponent,
   DeleteSessionDialogComponent,
   StateTabComponent,
+  StateHistoryComponent,
   TraceChartComponent,
   ViewImageDialogComponent,
   RunEvalConfigDialogComponent,
@@ -85,10 +90,14 @@ const COMPONENTS = [
   AudioPlayerComponent,
   ResizableDrawerDirective,
   ResizableBottomDirective,
+  MarkdownEnhanceDirective,
+  TranslatePipe,
   TraceTabComponent,
   TraceTreeComponent,
   TraceEventComponent,
   JsonEditorComponent,
+  HitlRequestComponent,
+  InstructionDiffDialogComponent,
 ];
 
 @NgModule({
@@ -127,6 +136,7 @@ const COMPONENTS = [
     MatChipsModule,
     MatDialogModule,
     MatButtonToggleModule,
+    MatMenuModule,
   ],
 })
 export class ComponentModule {

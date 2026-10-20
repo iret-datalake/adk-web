@@ -16,13 +16,17 @@
  */
 
 
-import {Component, Inject, OnInit} from '@angular/core';
+import {Component, HostListener, Inject, OnInit} from '@angular/core';
 import {MAT_DIALOG_DATA, MatDialogRef} from '@angular/material/dialog';
 import {DomSanitizer, SafeHtml, SafeUrl} from '@angular/platform-browser';
 
 export interface ViewImageDialogData {
   imageData: string|null;
 }
+
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 8;
+const BUTTON_ZOOM_STEP = 1.25;
 
 @Component({
   selector: 'app-view-image-dialog',
@@ -35,6 +39,12 @@ export class ViewImageDialogComponent implements OnInit {
   displayContent: SafeUrl|SafeHtml|null = null;
   // Flag to determine if the content is SVG
   isSvgContent: boolean = false;
+
+  scale = 1;
+  offsetX = 0;
+  offsetY = 0;
+  isDragging = false;
+  private dragStart = {x: 0, y: 0, offsetX: 0, offsetY: 0};
 
   constructor(
       public dialogRef: MatDialogRef<ViewImageDialogComponent>,
@@ -67,13 +77,82 @@ export class ViewImageDialogComponent implements OnInit {
       this.isSvgContent = true;
       this.displayContent = this.sanitizer.bypassSecurityTrustHtml(imageData);
     } else {
-      // Assume it's base64 data if not SVG.
-      // Ensure it has the correct data URI prefix.
-      const prefix =
-          imageData.startsWith('data:image/') ? '' : 'data:image/png;base64,';
+      // Data URIs and links (images in markdown) are used as they are;
+      // anything else is raw base64.
+      const prefix = /^(data:image\/|https?:|blob:)/.test(imageData) ?
+          '' :
+          'data:image/png;base64,';
       this.isSvgContent = false;
       this.displayContent =
           this.sanitizer.bypassSecurityTrustUrl(prefix + imageData);
+    }
+  }
+
+  get transform(): string {
+    return `translate(${this.offsetX}px, ${this.offsetY}px) scale(${
+        this.scale})`;
+  }
+
+  get zoomPercent(): number {
+    return Math.round(this.scale * 100);
+  }
+
+  zoomIn() {
+    this.zoomTo(this.scale * BUTTON_ZOOM_STEP);
+  }
+
+  zoomOut() {
+    this.zoomTo(this.scale / BUTTON_ZOOM_STEP);
+  }
+
+  resetZoom() {
+    this.scale = 1;
+    this.offsetX = 0;
+    this.offsetY = 0;
+  }
+
+  toggleZoom() {
+    if (this.scale === 1) {
+      this.zoomTo(2);
+    } else {
+      this.resetZoom();
+    }
+  }
+
+  onWheel(event: WheelEvent) {
+    event.preventDefault();
+    this.zoomTo(this.scale * Math.pow(1.002, -event.deltaY));
+  }
+
+  startDrag(event: PointerEvent) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    this.isDragging = true;
+    this.dragStart = {
+      x: event.clientX,
+      y: event.clientY,
+      offsetX: this.offsetX,
+      offsetY: this.offsetY,
+    };
+  }
+
+  @HostListener('document:pointermove', ['$event'])
+  drag(event: PointerEvent) {
+    if (!this.isDragging) return;
+    this.offsetX = this.dragStart.offsetX + event.clientX - this.dragStart.x;
+    this.offsetY = this.dragStart.offsetY + event.clientY - this.dragStart.y;
+  }
+
+  @HostListener('document:pointerup')
+  endDrag() {
+    this.isDragging = false;
+  }
+
+  private zoomTo(scale: number) {
+    this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+    if (this.scale === 1) {
+      this.offsetX = 0;
+      this.offsetY = 0;
     }
   }
 

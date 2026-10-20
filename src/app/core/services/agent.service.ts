@@ -60,6 +60,11 @@ export class AgentService {
     }
     return new Observable<string>((observer) => {
       const self = this;
+      // Unsubscribing aborts the request (stop button); the backend then stops
+      // the agent run when it sees the connection close.
+      const controller = new AbortController();
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+      let finished = false;
       fetch(url, {
         method: 'POST',
         headers: {
@@ -67,9 +72,10 @@ export class AgentService {
           'Accept': 'text/event-stream',
         },
         body: JSON.stringify(req),
+        signal: controller.signal,
       })
         .then((response) => {
-          const reader = response.body?.getReader();
+          reader = response.body?.getReader();
           const decoder = new TextDecoder('utf-8');
           let lastData = '';
 
@@ -80,6 +86,7 @@ export class AgentService {
                     this.isLoading.next(true);
                   }
                   if (done) {
+                    finished = true;
                     if (!suppressLoading) {
                       this.isLoading.next(false);
                     }
@@ -106,6 +113,10 @@ export class AgentService {
                   read();  // Read the next chunk
                 })
                 .catch((err) => {
+                  if (controller.signal.aborted) {
+                    return;
+                  }
+                  finished = true;
                   if (!suppressLoading) {
                     this.isLoading.next(false);
                   }
@@ -116,11 +127,26 @@ export class AgentService {
           read();
         })
         .catch((err) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+          finished = true;
           if (!suppressLoading) {
             this.isLoading.next(false);
           }
           self.zone.run(() => observer.error(err));
         });
+
+      return () => {
+        if (finished) {
+          return;
+        }
+        controller.abort();
+        reader?.cancel().catch(() => {});
+        if (!suppressLoading) {
+          this.isLoading.next(false);
+        }
+      };
     });
   }
 

@@ -1,0 +1,53 @@
+<!--
+ Copyright 2025 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<div class="state-history">
+  @if (!entries.length) {
+    <p class="state-history-empty">{{ 'stateHistory.empty' | t }}</p>
+  }
+  @for (entry of entries; track entry.eventId) {
+    <div class="state-history-entry">
+      <button type="button" class="state-history-head" (click)="eventSelected.emit(entry.eventId)">
+        <span class="state-history-time">{{ entry.time | date: 'HH:mm:ss' }}</span>
+        <span class="state-history-author">{{ entry.author }}</span>
+      </button>
+      @for (change of entry.changes; track change.key) {
+        <div class="state-history-change">
+          <div class="state-history-key">
+            {{ change.key }}
+            @if (change.long) {
+              <button type="button" class="state-history-more" (click)="toggle(entry, change)">
+                {{ (isExpanded(entry, change) ? 'state.showLess' : 'state.showMore') | t }}
+              </button>
+            }
+          </div>
+          @if (isExpanded(entry, change)) {
+            <div class="state-history-label">{{ 'hitl.before' | t }}</div>
+            <pre class="state-history-value before">{{ pretty(change.before) }}</pre>
+            <div class="state-history-label">{{ 'hitl.after' | t }}</div>
+            <pre class="state-history-value">{{ pretty(change.after) }}</pre>
+          } @else {
+            <div class="state-history-diff">
+              <span class="state-history-value before">{{ short(change.before) }}</span>
+              <mat-icon>arrow_forward</mat-icon>
+              <span class="state-history-value">{{ short(change.after) }}</span>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

@@ -26,6 +26,82 @@ html {
   ));
 }
 
+// Theme tokens for the app's own UI. Material components follow
+// `color-scheme`; ThemeService sets `data-theme` on <html>.
+:root {
+  --app-bg: #ffffff;
+  --app-surface: #f8f9fa;
+  --app-surface-variant: #f1f3f4;
+  --app-card: #ffffff;
+  --app-hover: rgba(0, 0, 0, 0.05);
+  --app-border: #dadce0;
+  --app-divider: #e0e0e0;
+  --app-text: #202124;
+  --app-text-secondary: #5f6368;
+  --app-text-tertiary: #80868b;
+  --app-accent: #1a73e8;
+  --app-on-accent: #ffffff;
+  --app-accent-soft: #e8f0fe;
+  --app-on-accent-soft: #1967d2;
+  --app-link: #1a73e8;
+  --app-success: #188038;
+  --app-success-soft: #e6f4ea;
+  --app-danger: #d93025;
+  --app-danger-soft: #fce8e6;
+  --app-running: #8ab4f8;
+  --app-user-bubble: #dcf8c6;
+  --app-bot-bubble: #eeeeee;
+  --app-code-bg: #ffffff;
+  --app-shadow: rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --app-bg: #131314;
+  --app-surface: #1e1f20;
+  --app-surface-variant: #282a2c;
+  --app-card: #282a2c;
+  --app-hover: rgba(255, 255, 255, 0.08);
+  --app-border: #444746;
+  --app-divider: #333537;
+  --app-text: #e3e3e3;
+  --app-text-secondary: #a8abaf;
+  --app-text-tertiary: #80868b;
+  --app-accent: #8ab4f8;
+  --app-on-accent: #062e6f;
+  --app-accent-soft: #1f3760;
+  --app-on-accent-soft: #a8c7fa;
+  --app-link: #8ab4f8;
+  --app-success: #81c995;
+  --app-success-soft: #1e3a2a;
+  --app-danger: #f28b82;
+  --app-danger-soft: #3c1f1e;
+  --app-running: #8ab4f8;
+  --app-user-bubble: #2a3f2c;
+  --app-bot-bubble: #282a2c;
+  --app-code-bg: #1e1f20;
+  --app-shadow: rgba(0, 0, 0, 0.6);
+  // ngx-json-viewer (event details) defaults to dark text.
+  --ngx-json-key: #e3e3e3;
+  --ngx-json-separator: #a8abaf;
+  --ngx-json-value: #e3e3e3;
+  --ngx-json-string: #81c995;
+  --ngx-json-number: #8ab4f8;
+  --ngx-json-boolean: #f28b82;
+  --ngx-json-object: #a8abaf;
+  --ngx-json-array: #a8abaf;
+  --ngx-json-toggler: #a8abaf;
+  --ngx-json-null: #e3e3e3;
+  --ngx-json-null-bg: #b3261e;
+  --ngx-json-undefined: #a8abaf;
+  --ngx-json-undefined-key: #a8abaf;
+}
+
+body {
+  background-color: var(--app-bg);
+  color: var(--app-text);
+}
+
 html {
   font-family: 'Google Sans', 'Helvetica Neue', sans-serif;
 } 
@@ -38,17 +114,25 @@ body {
 markdown p {
   margin-block-start: 0.5em;
   margin-block-end: 0.5em;
-  color: black !important;
+  color: inherit !important;
 }
 
 markdown {
-  color: black !important;
+  color: var(--app-text) !important;
+}
+
+markdown.muted-text {
+  color: var(--app-text-secondary) !important;
+}
+
+markdown a {
+  color: var(--app-link);
 }
 
 :root {
-  --mat-sys-primary: black;
+  --mat-sys-primary: light-dark(black, #e3e3e3);
   --mdc-checkbox-selected-icon-color: white;
-  --mat-sys-background: #131314;
+  --mat-sys-background: var(--app-bg);
   // tab variable overrides
   --mat-tab-header-active-label-text-color: #8AB4F8;
   --mat-tab-header-active-hover-label-text-color: #8AB4F8;
@@ -73,13 +157,281 @@ markdown {
 
 .light-dialog {
   .mat-mdc-dialog-surface {
-    background-color: #ffffff !important;
-    color: #202124;
+    background-color: var(--app-bg) !important;
+    color: var(--app-text);
   }
 
   .mat-mdc-dialog-title,
   .mat-mdc-dialog-content,
   .mat-mdc-dialog-actions {
     color: inherit;
+  }
+}
+// Added to rendered markdown by MarkdownEnhanceDirective.
+markdown pre {
+  position: relative;
+  // Room for the copy button in the top-right corner.
+  padding: 10px 40px 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background-color: var(--app-code-bg);
+  font-size: 13px;
+}
+
+.markdown-copy-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--app-surface-variant);
+  color: var(--app-text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out, background-color 0.15s ease-in-out;
+
+  pre:hover &,
+  &:focus-visible,
+  &.copied {
+    opacity: 1;
+  }
+
+  &:hover {
+    background-color: var(--app-border);
+    color: var(--app-text);
+  }
+
+  &.copied {
+    color: var(--app-success);
+  }
+}
+
+.markdown-mermaid {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  // Diagrams are drawn for a light background, also in the dark theme.
+  background-color: #ffffff;
+
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+markdown img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.markdown-zoomable {
+  cursor: zoom-in;
+}
+
+// Display settings (language / theme) in the toolbar menu.
+.settings-menu .settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 16px 12px;
+}
+
+.settings-menu .settings-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.settings-menu .settings-dev-mode {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.settings-menu .settings-hint {
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+}
+
+.usage-tooltip {
+  white-space: pre-line;
+}
+
+.settings-menu .settings-toggle {
+  .mat-button-toggle {
+    flex: 1;
+  }
+
+  .mat-button-toggle-label-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 14px;
+    font-size: 13px;
+  }
+
+  .mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+// Agent graph with the agents / tools a turn used (ChatComponent.decorateFlowSvg).
+// Overrides the colors ADK's graph builder draws with, to follow the theme.
+svg.flow-graph {
+  // Also in the image viewer, whose SVG area is white for Mermaid diagrams.
+  background-color: var(--app-bg);
+
+  .graph > polygon {
+    fill: transparent;
+    stroke: none;
+  }
+
+  .node polygon,
+  .node ellipse,
+  .node path,
+  .cluster polygon,
+  .cluster path {
+    fill: var(--app-surface);
+    stroke: var(--app-border);
+  }
+
+  // Keep Graphviz's font: node sizes are computed from its metrics.
+  .node text,
+  .cluster text {
+    fill: var(--app-text-secondary);
+  }
+
+  .edge path {
+    stroke: var(--app-border);
+  }
+
+  .edge polygon {
+    fill: var(--app-border);
+    stroke: var(--app-border);
+  }
+
+  .node.flow-done polygon,
+  .node.flow-done ellipse,
+  .node.flow-done path {
+    fill: var(--app-accent-soft);
+    stroke: var(--app-accent);
+    stroke-width: 1.5;
+  }
+
+  .node.flow-done text,
+  .node.flow-running text {
+    fill: var(--app-text);
+  }
+
+  .node.flow-running polygon,
+  .node.flow-running ellipse,
+  .node.flow-running path {
+    fill: var(--app-accent-soft);
+    stroke: var(--app-running);
+    stroke-width: 2;
+    animation: flow-pulse 1.2s ease-in-out infinite;
+  }
+
+  .node.flow-aborted polygon,
+  .node.flow-aborted ellipse,
+  .node.flow-aborted path {
+    stroke: var(--app-text-tertiary);
+    stroke-dasharray: 4 3;
+  }
+
+  .edge.flow-done path {
+    stroke: var(--app-accent);
+    stroke-width: 2;
+  }
+
+  .edge.flow-done polygon {
+    fill: var(--app-accent);
+    stroke: var(--app-accent);
+  }
+
+  // The edge of a call still waiting for its result: the "current" step.
+  .edge.flow-running path {
+    stroke: var(--app-running);
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+    animation: flow-dash 0.8s linear infinite;
+  }
+
+  .edge.flow-running polygon {
+    fill: var(--app-running);
+    stroke: var(--app-running);
+  }
+
+  .edge.flow-aborted path {
+    stroke: var(--app-text-tertiary);
+    stroke-dasharray: 4 3;
+  }
+}
+
+// Workflow of a turn (ChatComponent.flowDot): node kinds and the lane of each call.
+svg.flow-graph {
+  .cluster.flow-lane polygon,
+  .cluster.flow-lane path {
+    fill: transparent;
+    stroke: var(--app-border);
+    stroke-dasharray: 3 3;
+  }
+
+  .cluster.flow-lane.flow-running polygon,
+  .cluster.flow-lane.flow-running path {
+    stroke: var(--app-running);
+  }
+
+  .node.flow-round.flow-done polygon,
+  .node.flow-round.flow-done path {
+    fill: var(--app-surface-variant);
+    stroke: var(--app-border);
+  }
+
+  .node.flow-start ellipse,
+  .node.flow-end.flow-done ellipse {
+    fill: var(--app-success-soft);
+    stroke: var(--app-success);
+  }
+
+  .node.flow-start text,
+  .node.flow-end text {
+    fill: var(--app-text);
+  }
+
+  .node.flow-tool text {
+    font-size: 10px;
+  }
+}
+
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+@keyframes flow-pulse {
+  50% {
+    stroke-opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  svg.flow-graph .edge.flow-running path,
+  svg.flow-graph .node.flow-running * {
+    animation: none;
   }
 }

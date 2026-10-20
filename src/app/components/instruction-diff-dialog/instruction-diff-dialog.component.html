@@ -1,0 +1,44 @@
+<!--
+ Copyright 2025 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<div class="diff-dialog">
+  <div class="diff-header">
+    <div>
+      <div class="diff-title">{{ 'sid.title' | t: {agent: data.agent} }}</div>
+      <div class="diff-summary">
+        <span class="added">+{{ added }}</span> <span class="removed">−{{ removed }}</span>
+        {{ 'sid.subtitle' | t }}
+      </div>
+    </div>
+    <button type="button" class="diff-close" (click)="dialogRef.close()" [attr.aria-label]="'sid.close' | t">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+  <div class="diff-body">
+    @for (line of lines; track $index) {
+      @if (line.type === 'skipped') {
+        <div class="diff-line skipped">{{ 'sid.skipped' | t: {count: line.text} }}</div>
+      } @else {
+        <div class="diff-line" [class.added]="line.type === 'added'" [class.removed]="line.type === 'removed'">
+          <span class="diff-number">{{ line.oldNumber ?? '' }}</span>
+          <span class="diff-number">{{ line.newNumber ?? '' }}</span>
+          <span class="diff-mark">{{ line.type === 'added' ? '+' : line.type === 'removed' ? '−' : ' ' }}</span>
+          <span class="diff-text">{{ line.text }}</span>
+        </div>
+      }
+    }
+  </div>
+</div>

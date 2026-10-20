@@ -1,3 +1,6 @@
 {
-  "backendUrl": ""
+  "backendUrl": "",
+  "logo": {
+    "text": "社内AI検索"
+  }
 }

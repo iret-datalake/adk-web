@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-import {Component, EventEmitter, Input, OnChanges, Output, SimpleChanges} from '@angular/core';
+import {Component, effect, EventEmitter, inject, Input, OnChanges, Output, SimpleChanges, untracked} from '@angular/core';
 import {take} from 'rxjs';
 
+import {I18nService} from '../../core/i18n/i18n.service';
 import {SessionService} from '../../core/services/session.service';
 
 type PlatformStatusCategory = 'completed' | 'overdue' | 'upcoming' | 'active';
@@ -114,7 +115,16 @@ export class StateTabComponent implements OnChanges {
   private readonly displayablePlatforms: ReadonlySet<string> =
       new Set(['asana', 'gdrive', 'backlog', 'slack', 'gmail']);
 
-  constructor(private readonly sessionService: SessionService) {}
+  private readonly i18n = inject(I18nService);
+
+  constructor(private readonly sessionService: SessionService) {
+    // Status labels and fallback titles are built into the view models, so
+    // rebuild them when the language changes.
+    effect(() => {
+      this.i18n.language();
+      untracked(() => this.resetPlatformState());
+    });
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if ('sessionState' in changes) {
@@ -514,13 +524,13 @@ export class StateTabComponent implements OnChanges {
 
   protected getPlatformAccent(platform: string): string {
     const palette: Record<string, string> = {
-      'asana': '#fde2d0',
-      'backlog': '#e2e6ff',
-      'gdrive': '#e1f4e5',
-      'gmail': '#fde1e1',
-      'slack': '#f1e5ff',
+      'asana': 'light-dark(#fde2d0, #3b2a20)',
+      'backlog': 'light-dark(#e2e6ff, #262b45)',
+      'gdrive': 'light-dark(#e1f4e5, #1f3326)',
+      'gmail': 'light-dark(#fde1e1, #3b2224)',
+      'slack': 'light-dark(#f1e5ff, #2f2640)',
     };
-    return palette[platform] ?? '#f7f9fa';
+    return palette[platform] ?? 'light-dark(#f7f9fa, #1e1f20)';
   }
 
   protected getPlatformBodyColor(platform: string): string {
@@ -1061,7 +1071,7 @@ export class StateTabComponent implements OnChanges {
         return candidate.trim();
       }
     }
-    return 'Untitled issue';
+    return this.i18n.t('state.untitledIssue');
   }
 
   private extractBacklogDescription(issue: Record<string, any>): string | null {
@@ -1107,10 +1117,10 @@ export class StateTabComponent implements OnChanges {
       }
     }
     if (completed) {
-      return 'Completed';
+      return this.i18n.t('state.completed');
     }
     if (overdue) {
-      return 'Overdue';
+      return this.i18n.t('state.overdue');
     }
     return null;
   }
@@ -1150,7 +1160,7 @@ export class StateTabComponent implements OnChanges {
         return candidate.trim();
       }
     }
-    return 'Untitled task';
+    return this.i18n.t('state.untitledTask');
   }
 
   private extractDriveName(file: Record<string, any>): string {
@@ -1160,7 +1170,7 @@ export class StateTabComponent implements OnChanges {
         return candidate.trim();
       }
     }
-    return 'Untitled file';
+    return this.i18n.t('state.untitledFile');
   }
 
   private extractDueDate(task: Record<string, any>): string | null {
@@ -1206,10 +1216,10 @@ export class StateTabComponent implements OnChanges {
       return explicitStatus;
     }
     if (completed) {
-      return 'Completed';
+      return this.i18n.t('state.completed');
     }
     if (overdue) {
-      return 'Overdue';
+      return this.i18n.t('state.overdue');
     }
     return null;
   }

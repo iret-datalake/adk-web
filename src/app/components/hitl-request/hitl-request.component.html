@@ -1,0 +1,254 @@
+<!--
+ Copyright 2025 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<div class="hitl-card" [class.resolved]="resolution" [class.expired]="expired && !resolution">
+  <div class="hitl-header">
+    <mat-icon class="hitl-icon">{{
+      request.kind === 'confirmation' ? 'verified_user' : request.kind === 'input' ? 'edit_note' : 'pending_actions'
+    }}</mat-icon>
+    <span class="hitl-title">
+      @switch (request.kind) {
+        @case ('confirmation') { {{ writeTitle || ('hitl.confirmTitle' | t: {tool: request.toolName ?? ''}) }} }
+        @case ('input') { {{ 'hitl.inputTitle' | t }} }
+        @default { {{ 'hitl.resultTitle' | t: {tool: request.toolName ?? ''} }} }
+      }
+    </span>
+    @if (resolution) {
+      <span class="hitl-status done">{{ resolutionText }}</span>
+    } @else if (expired) {
+      <span class="hitl-status">{{ 'hitl.expired' | t }}</span>
+    } @else {
+      <span class="hitl-status waiting">{{ 'hitl.waiting' | t }}</span>
+    }
+  </div>
+
+  @if (write) {
+    @if (write.target) {
+      <p class="hitl-text"><span class="hitl-target-label">{{ 'hitl.target' | t }}</span>{{ write.target }}</p>
+    }
+  } @else if (request.hint) {
+    <p class="hitl-text">{{ request.hint }}</p>
+  }
+  @if (request.message) {
+    <p class="hitl-text">{{ request.message }}</p>
+  }
+  @if (request.kind === 'confirmation' && !request.hint && !write) {
+    <p class="hitl-text">{{ 'hitl.confirmDefault' | t }}</p>
+  }
+  @if (request.kind === 'longRunning') {
+    <p class="hitl-text">{{ 'hitl.resultDescription' | t }}</p>
+  }
+
+  @if (write) {
+    @if (changeRows.length) {
+      <table class="hitl-changes">
+        <thead>
+          <tr>
+            <th>{{ 'hitl.field' | t }}</th>
+            <th>{{ 'hitl.before' | t }}</th>
+            <th>{{ 'hitl.after' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of changeRows; track row.label) {
+            <tr>
+              <td class="hitl-change-label">{{ row.label }}</td>
+              <td class="hitl-change-before">{{ row.before }}</td>
+              <td class="hitl-change-after">{{ row.after }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+    @if (contentEntries.length) {
+      <div class="hitl-label">{{ (write.action === 'delete' ? 'hitl.toDelete' : 'hitl.content') | t }}</div>
+      <dl class="hitl-args">
+        @for (entry of contentEntries; track entry.key) {
+          <dt>{{ entry.key }}</dt>
+          <dd>{{ entry.value }}</dd>
+        }
+      </dl>
+    }
+  } @else if (argEntries.length) {
+    <dl class="hitl-args">
+      @for (entry of argEntries; track entry.key) {
+        <dt>{{ entry.key }}</dt>
+        <dd>{{ entry.value }}</dd>
+      }
+    </dl>
+  }
+  @if (!write && request.payload !== undefined && request.payload !== null) {
+    <div class="hitl-label">{{ 'hitl.payload' | t }}</div>
+    <pre class="hitl-payload">{{ payloadJson }}</pre>
+  }
+
+  @if (answerEntries.length) {
+    <div class="hitl-label">{{ 'hitl.yourAnswer' | t }}</div>
+    <dl class="hitl-args">
+      @for (entry of answerEntries; track entry.key) {
+        <dt>{{ entry.key }}</dt>
+        <dd>{{ entry.value }}</dd>
+      }
+    </dl>
+  }
+
+  @if (!resolution && !expired) {
+    @if (request.kind === 'confirmation') {
+      <div class="hitl-actions">
+        <button type="button" class="hitl-button primary" [disabled]="locked" (click)="approve(true)">
+          <mat-icon>check</mat-icon>{{ 'hitl.approve' | t }}
+        </button>
+        <button type="button" class="hitl-button" [disabled]="locked" (click)="approve(false)">
+          <mat-icon>close</mat-icon>{{ 'hitl.reject' | t }}
+        </button>
+      </div>
+    } @else if (inputMode === 'boolean' && !editAsJson) {
+      <div class="hitl-actions">
+        <button type="button" class="hitl-button primary" [disabled]="locked" (click)="answer(true)">
+          {{ 'hitl.yes' | t }}
+        </button>
+        <button type="button" class="hitl-button" [disabled]="locked" (click)="answer(false)">
+          {{ 'hitl.no' | t }}
+        </button>
+      </div>
+    } @else {
+      <form class="hitl-form" (ngSubmit)="submit()">
+        @if (editAsJson || inputMode === 'json') {
+          <textarea
+            class="hitl-input hitl-json"
+            name="json"
+            rows="6"
+            spellcheck="false"
+            [(ngModel)]="jsonText"
+            [disabled]="locked"
+            [attr.aria-label]="'hitl.json' | t"
+          ></textarea>
+        } @else if (inputMode === 'object') {
+          @for (field of fields; track field.key) {
+            <div class="hitl-field" [class.inline]="field.type === 'boolean'">
+              @if (field.type === 'boolean') {
+                <input
+                  type="checkbox"
+                  [id]="fieldId(field)"
+                  [name]="field.key"
+                  [(ngModel)]="values[field.key]"
+                  [disabled]="locked"
+                />
+              }
+              <label [for]="fieldId(field)">
+                {{ field.title }}@if (field.required) {<span class="hitl-required">*</span>}
+              </label>
+              @if (field.type === 'multi') {
+                <div class="hitl-choices">
+                  @for (option of field.options; track option) {
+                    <label class="hitl-choice">
+                      <input
+                        type="checkbox"
+                        [checked]="isTicked(values[field.key], option)"
+                        [disabled]="locked"
+                        (change)="toggleOption(field, option, $any($event.target).checked)"
+                      />
+                      {{ option }}
+                    </label>
+                  }
+                </div>
+              } @else if (field.options) {
+                <select
+                  class="hitl-input"
+                  [id]="fieldId(field)"
+                  [name]="field.key"
+                  [(ngModel)]="values[field.key]"
+                  [disabled]="locked"
+                >
+                  @if (!field.required) {
+                    <option value=""></option>
+                  }
+                  @for (option of field.options; track option) {
+                    <option [ngValue]="option">{{ option }}</option>
+                  }
+                </select>
+              } @else if (field.type === 'integer' || field.type === 'number') {
+                <input
+                  class="hitl-input"
+                  type="number"
+                  [step]="field.type === 'integer' ? 1 : 'any'"
+                  [id]="fieldId(field)"
+                  [name]="field.key"
+                  [(ngModel)]="values[field.key]"
+                  [disabled]="locked"
+                />
+              } @else if (field.type !== 'boolean') {
+                <input
+                  class="hitl-input"
+                  type="text"
+                  [id]="fieldId(field)"
+                  [name]="field.key"
+                  [placeholder]="field.type === 'json' ? 'JSON' : ''"
+                  [(ngModel)]="values[field.key]"
+                  [disabled]="locked"
+                />
+              }
+              @if (field.description) {
+                <div class="hitl-description">{{ field.description }}</div>
+              }
+            </div>
+          }
+        } @else if (inputMode === 'multi') {
+          <div class="hitl-choices">
+            @for (option of multiOptions; track option) {
+              <label class="hitl-choice">
+                <input
+                  type="checkbox"
+                  [checked]="isTicked(multiValues, option)"
+                  [disabled]="locked"
+                  (change)="toggleOption(null, option, $any($event.target).checked)"
+                />
+                {{ option }}
+              </label>
+            }
+          </div>
+        } @else if (inputMode === 'number') {
+          <input class="hitl-input" type="number" name="number" [(ngModel)]="text" [disabled]="locked" />
+        } @else {
+          <textarea
+            class="hitl-input"
+            name="text"
+            rows="2"
+            [(ngModel)]="text"
+            [disabled]="locked"
+            [placeholder]="'hitl.answerPlaceholder' | t"
+          ></textarea>
+        }
+        @if (error) {
+          <div class="hitl-error">{{ error }}</div>
+        }
+        <div class="hitl-actions">
+          <button type="submit" class="hitl-button primary" [disabled]="locked">
+            <mat-icon>send</mat-icon>{{ 'hitl.send' | t }}
+          </button>
+          @if (inputMode === 'object') {
+            <button type="button" class="hitl-link" [disabled]="locked" (click)="toggleJson()">
+              {{ (editAsJson ? 'hitl.editAsForm' : 'hitl.editAsJson') | t }}
+            </button>
+          }
+        </div>
+      </form>
+    }
+    @if (disabled) {
+      <div class="hitl-description">{{ 'hitl.waitForResponse' | t }}</div>
+    }
+  }
+</div>

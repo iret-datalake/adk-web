@@ -21,6 +21,18 @@ import {Observable} from 'rxjs';
 
 import {URLUtil} from '../../../utils/url-util';
 
+export type FeedbackDirection = 'up' | 'down';
+
+export interface MessageFeedbackInput {
+  direction: FeedbackDirection;
+  comment?: string;
+}
+
+/** One rating, as stored under `message_feedback` in the session state. */
+export interface MessageFeedback extends MessageFeedbackInput {
+  updated_at?: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -59,6 +71,28 @@ export class SessionService {
         `/apps/${appName}/users/${userId}/sessions/${sessionId}`;
 
     return this.http.get<any>(url);
+  }
+
+  /** Saves the user's rating of one answer (in the session state). */
+  putMessageFeedback(
+      userId: string,
+      appName: string,
+      sessionId: string,
+      eventId: string,
+      feedback: MessageFeedbackInput,
+  ) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/sessions/${sessionId}/feedback/${
+                    encodeURIComponent(eventId)}`;
+    return this.http.put<MessageFeedback>(url, feedback);
+  }
+
+  deleteMessageFeedback(
+      userId: string, appName: string, sessionId: string, eventId: string) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/sessions/${sessionId}/feedback/${
+                    encodeURIComponent(eventId)}`;
+    return this.http.delete<void>(url);
   }
 
   getSessionBrief(userId: string, appName: string, sessionId: string) {
