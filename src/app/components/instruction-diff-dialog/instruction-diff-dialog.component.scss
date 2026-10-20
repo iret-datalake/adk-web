@@ -1,0 +1,115 @@
+/**
+ * Copyright 2025 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+.diff-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  background-color: var(--app-bg);
+  color: var(--app-text);
+}
+
+.diff-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 16px 10px 20px;
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.diff-title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.diff-summary {
+  margin-top: 2px;
+  color: var(--app-text-secondary);
+  font-size: 12px;
+
+  .added {
+    color: var(--app-success);
+    font-weight: 500;
+  }
+
+  .removed {
+    color: var(--app-danger);
+    font-weight: 500;
+  }
+}
+
+.diff-close {
+  display: flex;
+  margin: 0;
+  padding: 4px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--app-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--app-hover);
+  }
+}
+
+.diff-body {
+  overflow: auto;
+  padding: 8px 0 12px;
+  font-family: 'Google Sans Mono', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.diff-line {
+  display: grid;
+  grid-template-columns: 36px 36px 16px minmax(0, 1fr);
+  padding: 0 12px 0 4px;
+
+  &.added {
+    background-color: var(--app-success-soft);
+  }
+
+  &.removed {
+    background-color: var(--app-danger-soft);
+  }
+
+  &.skipped {
+    display: block;
+    padding: 2px 16px;
+    background-color: var(--app-surface);
+    color: var(--app-text-tertiary);
+    text-align: center;
+  }
+}
+
+.diff-number {
+  color: var(--app-text-tertiary);
+  text-align: right;
+  padding-right: 8px;
+  user-select: none;
+}
+
+.diff-mark {
+  color: var(--app-text-secondary);
+  user-select: none;
+}
+
+.diff-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
