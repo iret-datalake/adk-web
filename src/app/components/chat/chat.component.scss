@@ -299,6 +299,82 @@
   }
 }
 
+// Pushes the + button to the left and the mode / model / send controls to the right.
+.chat-input-spacer {
+  flex: 1;
+}
+
+// `.chat-input-actions button` adds side margins to every button; these sit flush.
+.chat-input-actions .plus-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 50%;
+  background-color: var(--app-surface-variant);
+  color: var(--app-text);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--app-hover);
+  }
+
+  .mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+}
+
+// Number of platforms turned on.
+.plus-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background-color: var(--app-accent);
+  color: var(--app-on-accent);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.chat-input-actions .model-button {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 2px;
+  margin: 0;
+  padding: 5px 6px 5px 10px;
+  border: none;
+  border-radius: 15px;
+  background: transparent;
+  color: var(--app-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--app-hover);
+  }
+
+  .mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
 .thinking-mode-switch {
   --mode-pad: 3px;
   position: relative;

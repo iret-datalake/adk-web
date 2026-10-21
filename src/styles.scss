@@ -263,6 +263,64 @@ markdown img {
   color: var(--app-text-tertiary);
 }
 
+// Chat input + menu: upload placeholders and the platform switches.
+.plus-menu {
+  min-width: 260px !important;
+
+  .plus-coming-soon {
+    margin-left: 8px;
+    font-size: 11px;
+    color: var(--app-text-tertiary);
+  }
+
+  .plus-divider {
+    margin: 4px 0;
+    border-top: 1px solid var(--app-border);
+  }
+
+  .plus-connectors {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 16px 10px;
+  }
+
+  .plus-label {
+    margin: 4px 0;
+    font-size: 12px;
+    color: var(--app-text-secondary);
+  }
+
+  .plus-platform {
+    width: 100%;
+
+    .mdc-form-field {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+    }
+
+    .mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: var(--app-text-secondary);
+    }
+  }
+
+  .plus-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--app-text-tertiary);
+  }
+}
+
 .usage-tooltip {
   white-space: pre-line;
 }

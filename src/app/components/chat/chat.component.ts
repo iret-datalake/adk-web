@@ -61,6 +61,8 @@ import {getLogoConfig} from '../../core/models/RuntimeConfig';
 import {HitlResolution} from '../hitl-request/hitl-request.component';
 import {InstructionDiffDialogComponent} from '../instruction-diff-dialog/instruction-diff-dialog.component';
 import {DevModeService} from '../../core/services/dev-mode.service';
+import {PlatformService} from '../../core/services/platform.service';
+import {MODEL_OPTIONS, PLATFORMS} from '../../core/models/Platform';
 import {ThemeService} from '../../core/services/theme.service';
 
 function fixBase64String(base64: string): string {
@@ -111,6 +113,7 @@ const AGENT_TOOL_NAMES: Record<string, string> = {
 const AGENT_TOOL_LABEL_KEYS: Record<string, MessageKey> = {
   sub_agent_glossary: 'agent.glossary',
   sub_agent_google_search: 'agent.googleSearch',
+  web_search: 'agent.webSearch',
 };
 
 /** error_code ADK puts on the events that seal a run stopped by the client. */
@@ -302,6 +305,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   protected readonly i18n = inject(I18nService);
   protected readonly themeService = inject(ThemeService);
   protected readonly devMode = inject(DevModeService);
+  protected readonly platformService = inject(PlatformService);
+  protected readonly platforms = PLATFORMS;
+  protected readonly modelOptions = MODEL_OPTIONS;
+  protected selectedModel = MODEL_OPTIONS[0];
   protected readonly logo = getLogoConfig();
 
   // Load apps
@@ -642,6 +649,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       },
       streaming: this.useSse,
       thinkingMode: this.thinkingMode,
+      enabledPlatforms: this.platformService.enabledIds(),
     };
     this.selectedFiles = [];
     this.runSseWithAuthRetry(req);
@@ -2309,6 +2317,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       },
       streaming: this.useSse,
       thinkingMode: this.thinkingMode,
+      enabledPlatforms: this.platformService.enabledIds(),
     };
     this.runSseWithAuthRetry(req);
   }
@@ -2331,7 +2340,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       const callId = call.id;
       const platform = this.platformLabel(call.name);
       if (platform) {
-        return {index, kind: 'call', label: this.i18n.t('activity.search', {platform}), detail: args.request, nested, callId};
+        return {index, kind: 'call', label: this.i18n.t('activity.call', {platform}), detail: args.request, nested, callId};
       }
       if (call.name === 'transfer_to_agent') {
         const agent = this.agentDisplayName(args.agent_name);
@@ -2368,7 +2377,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       return {
         index,
         kind: 'response',
-        label: platform ? this.i18n.t('activity.searchAborted', {platform}) :
+        label: platform ? this.i18n.t('activity.callAborted', {platform}) :
                           this.i18n.t('activity.aborted', {name}),
         nested,
         aborted: true,
@@ -2377,7 +2386,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     return {
       index,
       kind: 'response',
-      label: platform ? this.i18n.t('activity.searchDone', {platform}) :
+      label: platform ? this.i18n.t('activity.callDone', {platform}) :
                         this.i18n.t('activity.done', {name}),
       nested,
     };
@@ -2399,7 +2408,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     const steps = this.i18n.t('activity.steps', {count: group.steps.length});
     if (platforms.length > 0) {
       const separator = this.i18n.t('activity.platformSeparator');
-      return this.i18n.t('activity.summarySearch', {platforms: platforms.join(separator), steps});
+      return this.i18n.t('activity.summaryCall', {platforms: platforms.join(separator), steps});
     }
     if (group.steps.every((step) => step.kind === 'thought')) {
       return this.i18n.t('activity.summaryThought', {steps});

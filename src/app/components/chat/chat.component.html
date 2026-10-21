@@ -961,6 +961,47 @@
               style="caret-color: black"
             ></textarea>
             <div class="chat-input-actions">
+              <button
+                type="button"
+                class="plus-button"
+                [matMenuTriggerFor]="plusMenu"
+                [matTooltip]="'plus.menu' | t"
+                [attr.aria-label]="'plus.menu' | t"
+              >
+                <mat-icon>add</mat-icon>
+                <span class="plus-badge">{{ platformService.enabledCount() }}</span>
+              </button>
+              <mat-menu #plusMenu="matMenu" class="plus-menu" yPosition="above">
+                <!-- File and image upload are placeholders until the backend supports them. -->
+                <button mat-menu-item disabled>
+                  <mat-icon>attach_file</mat-icon>
+                  <span>{{ 'plus.addFile' | t }}</span>
+                  <span class="plus-coming-soon">{{ 'plus.comingSoon' | t }}</span>
+                </button>
+                <button mat-menu-item disabled>
+                  <mat-icon>image</mat-icon>
+                  <span>{{ 'plus.addImage' | t }}</span>
+                  <span class="plus-coming-soon">{{ 'plus.comingSoon' | t }}</span>
+                </button>
+                <div class="plus-divider"></div>
+                <!-- Keeps the menu open while switching platforms. -->
+                <div class="plus-connectors" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+                  <div class="plus-label">{{ 'plus.connectors' | t }}</div>
+                  @for (platform of platforms; track platform.id) {
+                    <mat-slide-toggle
+                      class="plus-platform"
+                      labelPosition="before"
+                      [checked]="platformService.isEnabled(platform.id)"
+                      (change)="platformService.setEnabled(platform.id, $event.checked)"
+                    >
+                      <mat-icon>{{ platform.icon }}</mat-icon>
+                      <span>{{ platform.name ?? (platform.labelKey! | t) }}</span>
+                    </mat-slide-toggle>
+                  }
+                  <div class="plus-hint">{{ 'plus.connectorsHint' | t }}</div>
+                </div>
+              </mat-menu>
+              <span class="chat-input-spacer"></span>
               <div
                 class="thinking-mode-switch"
                 role="radiogroup"
@@ -983,6 +1024,24 @@
                   </button>
                 }
               </div>
+              <!-- Only the current model for now; more models come later. -->
+              <button
+                type="button"
+                class="model-button"
+                [matMenuTriggerFor]="modelMenu"
+                [matTooltip]="'model.label' | t"
+              >
+                {{ selectedModel.label }}
+                <mat-icon>expand_more</mat-icon>
+              </button>
+              <mat-menu #modelMenu="matMenu" class="model-menu" yPosition="above" xPosition="before">
+                @for (model of modelOptions; track model.id) {
+                  <button mat-menu-item (click)="selectedModel = model">
+                    <mat-icon>{{ model.id === selectedModel.id ? 'check' : '' }}</mat-icon>
+                    <span>{{ model.label }}</span>
+                  </button>
+                }
+              </mat-menu>
               <!-- File upload is currently disabled; uncomment to enable -->
               <!--
               <button
