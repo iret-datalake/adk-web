@@ -131,7 +131,12 @@ markdown a {
 
 :root {
   --mat-sys-primary: light-dark(black, #e3e3e3);
-  --mdc-checkbox-selected-icon-color: white;
+  // A white box only shows on the dark theme; the light theme fills it with
+  // the accent so the (white) check mark is visible.
+  --mdc-checkbox-selected-icon-color: light-dark(var(--app-accent), white);
+  --mdc-checkbox-selected-hover-icon-color: light-dark(var(--app-accent), white);
+  --mdc-checkbox-selected-focus-icon-color: light-dark(var(--app-accent), white);
+  --mdc-checkbox-selected-checkmark-color: light-dark(white, var(--mat-sys-on-primary));
   --mat-sys-background: var(--app-bg);
   // tab variable overrides
   --mat-tab-header-active-label-text-color: #8AB4F8;
