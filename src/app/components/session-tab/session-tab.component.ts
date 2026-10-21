@@ -15,10 +15,22 @@
  * limitations under the License.
  */
 
-import {Component, EventEmitter, Input, OnInit, Output} from '@angular/core';
-import {Subject, switchMap} from 'rxjs';
+import {Component, ElementRef, EventEmitter, inject, Input, OnInit, Output, ViewChild} from '@angular/core';
+import {MatDialog} from '@angular/material/dialog';
+import {MatSnackBar} from '@angular/material/snack-bar';
+import {catchError, forkJoin, Observable, of, Subject, switchMap} from 'rxjs';
+import {I18nService} from '../../core/i18n/i18n.service';
 import {Session} from '../../core/models/Session';
-import {SessionService} from '../../core/services/session.service';
+import {SessionFolder, SessionFolders, SessionService} from '../../core/services/session.service';
+import {DeleteSessionDialogComponent, DeleteSessionDialogData} from './delete-session-dialog/delete-session-dialog.component';
+
+/** A folder with its sessions; `folder` is null for the unfiled sessions. */
+interface SessionGroup {
+  folder: SessionFolder|null;
+  sessions: any[];
+}
+
+const NO_FOLDERS: SessionFolders = {folders: [], assignments: {}};
 
 @Component({
   selector: 'app-session-tab',
@@ -33,10 +45,33 @@ export class SessionTabComponent implements OnInit {
 
   @Output() readonly sessionSelected = new EventEmitter<Session>();
   @Output() readonly sessionReloaded = new EventEmitter<Session>();
+  /** Ids of sessions deleted from this list (the list is already refreshed). */
+  @Output() readonly sessionsDeleted = new EventEmitter<string[]>();
 
   sessionList: any[] = [];
+  folders: SessionFolder[] = [];
+  /** sessionId -> folderId for the sessions that are in a folder. */
+  assignments: Record<string, string> = {};
+
+  selectMode = false;
+  readonly selectedIds = new Set<string>();
+  readonly collapsedFolderIds = new Set<string>();
+  creatingFolder = false;
+  renamingFolderId: string|null = null;
+  folderNameDraft = '';
+
+  /** Focuses the folder name input as soon as it is shown. */
+  @ViewChild('nameInput')
+  set nameInput(input: ElementRef<HTMLInputElement>|undefined) {
+    input?.nativeElement.focus();
+  }
 
   private refreshSessionsSubject = new Subject<void>();
+  private groupsCache: {key: unknown[]; groups: SessionGroup[]}|null = null;
+
+  private readonly dialog = inject(MatDialog);
+  private readonly snackBar = inject(MatSnackBar);
+  private readonly i18n = inject(I18nService);
 
   constructor(
     private sessionService: SessionService,
@@ -44,17 +79,21 @@ export class SessionTabComponent implements OnInit {
     this.refreshSessionsSubject
         .pipe(
             switchMap(
-                () =>
-                    this.sessionService.listSessions(this.userId, this.appName),
+                () => forkJoin([
+                  this.sessionService.listSessions(this.userId, this.appName),
+                  this.loadFolders(),
+                ]),
                 ),
             )
-        .subscribe((res) => {
+        .subscribe(([res, folders]) => {
+          this.applyFolders(folders);
           this.sessionList = res
             .map((session: any) => this.decorateSession(session))
             .sort(
               (a: any, b: any) =>
                 Number(b.lastUpdateTime) - Number(a.lastUpdateTime),
             );
+          this.pruneSelection();
         });
   }
 
@@ -62,6 +101,270 @@ export class SessionTabComponent implements OnInit {
     setTimeout(() => {
       this.refreshSessionsSubject.next();
     }, 500);
+  }
+
+  /** Folders (in creation order) then the unfiled sessions. */
+  get groups(): SessionGroup[] {
+    const key = [this.sessionList, this.folders, this.assignments];
+    if (this.groupsCache &&
+        this.groupsCache.key.every((value, i) => value === key[i])) {
+      return this.groupsCache.groups;
+    }
+    const byFolder = new Map<string, any[]>(
+        this.folders.map((folder) => [folder.id, []]));
+    const unfiled: any[] = [];
+    for (const session of this.sessionList) {
+      const folderSessions = byFolder.get(this.assignments[session.id]);
+      (folderSessions ?? unfiled).push(session);
+    }
+    const groups: SessionGroup[] = [
+      ...this.folders.map(
+          (folder) => ({folder, sessions: byFolder.get(folder.id)!})),
+      {folder: null, sessions: unfiled},
+    ];
+    this.groupsCache = {key, groups};
+    return groups;
+  }
+
+  onSessionClick(session: any) {
+    if (this.selectMode) {
+      this.toggleSelected(session.id);
+    } else {
+      this.getSession(session.id);
+    }
+  }
+
+  // --- Selection --------------------------------------------------------
+
+  startSelectMode() {
+    this.selectMode = true;
+  }
+
+  exitSelectMode() {
+    this.selectMode = false;
+    this.selectedIds.clear();
+  }
+
+  toggleSelected(sessionId: string) {
+    if (!this.selectedIds.delete(sessionId)) {
+      this.selectedIds.add(sessionId);
+    }
+  }
+
+  /** 'all', 'some' or 'none' of the sessions are selected. */
+  selectionOf(sessions: any[]): 'all'|'some'|'none' {
+    const count = sessions.filter((s) => this.selectedIds.has(s.id)).length;
+    if (count === 0) {
+      return 'none';
+    }
+    return count === sessions.length ? 'all' : 'some';
+  }
+
+  /** Selects all of `sessions`, or clears them if all were selected. */
+  toggleSelectedAll(sessions: any[]) {
+    const select = this.selectionOf(sessions) !== 'all';
+    for (const session of sessions) {
+      if (select) {
+        this.selectedIds.add(session.id);
+      } else {
+        this.selectedIds.delete(session.id);
+      }
+    }
+  }
+
+  private pruneSelection() {
+    const ids = new Set(this.sessionList.map((session) => session.id));
+    for (const id of [...this.selectedIds]) {
+      if (!ids.has(id)) {
+        this.selectedIds.delete(id);
+      }
+    }
+  }
+
+  // --- Deleting ---------------------------------------------------------
+
+  /** Deletes `ids`, or the selected sessions when omitted, after a confirm. */
+  deleteSessions(ids?: string[]) {
+    const sessionIds = ids ?? [...this.selectedIds];
+    if (!sessionIds.length) {
+      return;
+    }
+    this.confirm(
+            this.i18n.t('sessions.deleteTitle'),
+            this.i18n.t('sessions.deleteMessage', {count: sessionIds.length}),
+            this.i18n.t('sessions.delete'))
+        .subscribe((confirmed) => {
+          if (!confirmed) {
+            return;
+          }
+          this.sessionService
+              .deleteSessions(this.userId, this.appName, sessionIds)
+              .subscribe({
+                next: ({deleted, failed}) => {
+                  const gone = new Set(deleted);
+                  this.sessionList =
+                      this.sessionList.filter((s) => !gone.has(s.id));
+                  this.pruneSelection();
+                  if (!ids) {
+                    this.exitSelectMode();
+                  }
+                  if (failed.length) {
+                    this.notify(this.i18n.t(
+                        'sessions.deleteFailed', {count: failed.length}));
+                  }
+                  this.sessionsDeleted.emit(deleted);
+                  this.refreshSessionsSubject.next();
+                },
+                error: () => this.notify(this.i18n.t(
+                    'sessions.deleteFailed', {count: sessionIds.length})),
+              });
+        });
+  }
+
+  // --- Folders ----------------------------------------------------------
+
+  isCollapsed(folder: SessionFolder|null): boolean {
+    return !!folder && this.collapsedFolderIds.has(folder.id);
+  }
+
+  toggleCollapsed(folder: SessionFolder) {
+    if (!this.collapsedFolderIds.delete(folder.id)) {
+      this.collapsedFolderIds.add(folder.id);
+    }
+  }
+
+  startCreateFolder() {
+    this.renamingFolderId = null;
+    this.creatingFolder = true;
+    this.folderNameDraft = '';
+  }
+
+  startRenameFolder(folder: SessionFolder) {
+    this.creatingFolder = false;
+    this.renamingFolderId = folder.id;
+    this.folderNameDraft = folder.name;
+  }
+
+  cancelFolderEdit() {
+    this.creatingFolder = false;
+    this.renamingFolderId = null;
+    this.folderNameDraft = '';
+  }
+
+  /** Saves the folder being created or renamed. */
+  submitFolderName() {
+    const name = this.folderNameDraft.trim();
+    const renamingId = this.renamingFolderId;
+    const creating = this.creatingFolder;
+    this.cancelFolderEdit();
+    if (!name) {
+      return;
+    }
+    if (creating) {
+      this.sessionService.createSessionFolder(this.userId, this.appName, name)
+          .subscribe({
+            next: (folder) => this.folders = [...this.folders, folder],
+            error: () => this.notify(this.i18n.t('sessions.folderFailed')),
+          });
+    } else if (renamingId) {
+      this.sessionService
+          .renameSessionFolder(this.userId, this.appName, renamingId, name)
+          .subscribe({
+            next: (renamed) => this.folders = this.folders.map(
+                (folder) => folder.id === renamed.id ? renamed : folder),
+            error: () => this.notify(this.i18n.t('sessions.folderFailed')),
+          });
+    }
+  }
+
+  deleteFolder(folder: SessionFolder) {
+    this.confirm(
+            this.i18n.t('sessions.deleteFolder'),
+            this.i18n.t('sessions.deleteFolderMessage', {name: folder.name}),
+            this.i18n.t('sessions.delete'))
+        .subscribe((confirmed) => {
+          if (!confirmed) {
+            return;
+          }
+          this.sessionService
+              .deleteSessionFolder(this.userId, this.appName, folder.id)
+              .subscribe({
+                next: () => this.reloadFolders(),
+                error: () => this.notify(this.i18n.t('sessions.folderFailed')),
+              });
+        });
+  }
+
+  /**
+   * Moves `ids`, or the selected sessions when omitted, into `folderId`
+   * (null takes them out of any folder).
+   */
+  moveSessions(ids: string[]|undefined, folderId: string|null) {
+    const sessionIds = ids ?? [...this.selectedIds];
+    if (!sessionIds.length) {
+      return;
+    }
+    this.sessionService
+        .moveSessionsToFolder(this.userId, this.appName, sessionIds, folderId)
+        .subscribe({
+          next: () => {
+            const assignments = {...this.assignments};
+            for (const id of sessionIds) {
+              if (folderId) {
+                assignments[id] = folderId;
+              } else {
+                delete assignments[id];
+              }
+            }
+            this.assignments = assignments;
+            if (folderId) {
+              this.collapsedFolderIds.delete(folderId);
+            }
+            if (!ids) {
+              this.exitSelectMode();
+            }
+          },
+          error: () => this.notify(this.i18n.t('sessions.folderFailed')),
+        });
+  }
+
+  folderIdOf(sessionId: string): string|undefined {
+    return this.assignments[sessionId];
+  }
+
+  private loadFolders(): Observable<SessionFolders> {
+    // Folders are an extra; the session list must still load without them.
+    return this.sessionService.listSessionFolders(this.userId, this.appName)
+        .pipe(catchError(() => of(NO_FOLDERS)));
+  }
+
+  private reloadFolders() {
+    this.loadFolders().subscribe((folders) => this.applyFolders(folders));
+  }
+
+  private applyFolders({folders, assignments}: SessionFolders) {
+    this.folders = folders ?? [];
+    this.assignments = assignments ?? {};
+  }
+
+  private confirm(title: string, message: string, confirmButtonText: string) {
+    const data: DeleteSessionDialogData = {
+      title,
+      message,
+      confirmButtonText,
+      cancelButtonText: this.i18n.t('sessions.cancel'),
+    };
+    return this.dialog
+        .open(DeleteSessionDialogComponent, {
+          width: '600px',
+          data,
+          panelClass: 'light-dialog',
+        })
+        .afterClosed();
+  }
+
+  private notify(message: string) {
+    this.snackBar.open(message, 'OK', {duration: 5000});
   }
 
   getSession(sessionId: string) {

@@ -22,8 +22,26 @@
   font-weight: 700;
 }
 
+.session-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  margin-top: 8px;
+  font-weight: 500;
+
+  .toolbar-spacer {
+    flex: 1;
+  }
+}
+
+.session-tab-container {
+  margin-top: 8px;
+}
+
 .session-item {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   border: none;
   background-color: light-dark(#e0e3e7, #2d2f31);
@@ -36,6 +54,114 @@
   }
   &.current {
     background-color: light-dark(#b0b6c2, #3f4a5c);
+  }
+  &.selected {
+    outline: 2px solid var(--mat-sys-primary, #8ab4f8);
+    outline-offset: -2px;
+  }
+
+  .row-action {
+    visibility: hidden;
+  }
+  &:hover .row-action,
+  .row-action[aria-expanded='true'] {
+    visibility: visible;
+  }
+}
+
+.session-checkbox {
+  flex: none;
+}
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.folder-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding-left: 4px;
+  border-radius: 8px;
+  color: var(--app-text);
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    background-color: light-dark(#eceef1, #26282a);
+  }
+
+  .row-action {
+    visibility: hidden;
+  }
+  &:hover .row-action,
+  .row-action[aria-expanded='true'] {
+    visibility: visible;
+  }
+}
+
+.folder-chevron,
+.folder-icon {
+  flex: none;
+  color: var(--app-text-secondary);
+}
+
+.folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-count {
+  color: var(--app-text-secondary);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.folder-sessions {
+  margin-left: 16px;
+  margin-bottom: 8px;
+}
+
+.folder-empty {
+  padding: 4px 8px 8px;
+  color: var(--app-text-secondary);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.unfiled-header {
+  margin: 12px 0 6px 4px;
+  color: var(--app-text-secondary);
+  font-size: 12px;
+}
+
+.folder-name-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--app-text-secondary);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--app-text);
+    font: inherit;
+    font-weight: 400;
+    outline: none;
+
+    &:focus {
+      border-color: var(--mat-sys-primary, #8ab4f8);
+    }
   }
 }
 

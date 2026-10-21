@@ -81,6 +81,7 @@
               [sessionId]="sessionId"
               (sessionSelected)="updateWithSelectedSession($event)"
               (sessionReloaded)="updateSessionState($event)"
+              (sessionsDeleted)="onSessionsDeleted($event)"
             >
             </app-session-tab>
           </mat-tab>
