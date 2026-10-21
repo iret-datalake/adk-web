@@ -334,6 +334,14 @@
                   </mat-button-toggle-group>
                   <mat-slide-toggle
                     class="settings-dev-mode"
+                    [checked]="useSse"
+                    (change)="setTokenStreaming($event.checked)"
+                  >
+                    {{ 'settings.streaming' | t }}
+                  </mat-slide-toggle>
+                  <div class="settings-hint">{{ 'settings.streamingHint' | t }}</div>
+                  <mat-slide-toggle
+                    class="settings-dev-mode"
                     [checked]="devMode.enabled()"
                     (change)="devMode.setEnabled($event.checked)"
                   >

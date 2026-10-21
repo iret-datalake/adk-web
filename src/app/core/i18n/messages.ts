@@ -57,6 +57,8 @@ const JA = {
   'settings.dark': 'ダーク',
   'settings.devMode': '開発者モード',
   'settings.devModeHint': 'トークン使用量・State の変化・トレースを表示します',
+  'settings.streaming': 'トークンストリーミング',
+  'settings.streamingHint': '回答と思考を生成しながら表示します',
   'usage.session': 'このセッションの合計 {total}',
   'usage.tooltip': '入力 {prompt}（うちキャッシュ {cached}）\n出力 {output}\n思考 {thoughts}\n合計 {total}（LLM 呼び出し {calls} 回）',
 
@@ -258,6 +260,8 @@ const EN: Record<MessageKey, string> = {
   'settings.dark': 'Dark',
   'settings.devMode': 'Developer mode',
   'settings.devModeHint': 'Shows token usage, state changes, and traces',
+  'settings.streaming': 'Token streaming',
+  'settings.streamingHint': 'Shows the answer and thoughts while they are generated',
   'usage.session': 'Session total {total}',
   'usage.tooltip': 'Input {prompt} (cached {cached})\nOutput {output}\nThinking {thoughts}\nTotal {total} ({calls} LLM calls)',
 
