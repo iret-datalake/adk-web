@@ -108,6 +108,15 @@ const JA = {
   'agent.assistant': 'アシスタント',
   'agent.glossary': '用語集',
   'agent.googleSearch': 'Google 検索',
+  'agent.webSearch': 'ウェブ検索',
+
+  'plus.menu': 'ファイルの追加・連携',
+  'plus.addFile': 'ファイルを追加',
+  'plus.addImage': '画像を追加',
+  'plus.comingSoon': '準備中',
+  'plus.connectors': '連携',
+  'plus.connectorsHint': 'オンにしたものだけをアシスタントが使います',
+  'model.label': 'モデル',
 
   'hitl.confirmTitle': '{tool} の実行確認',
   'hitl.inputTitle': '入力のお願い',
@@ -281,6 +290,15 @@ const EN: Record<MessageKey, string> = {
   'agent.assistant': 'Assistant',
   'agent.glossary': 'Glossary',
   'agent.googleSearch': 'Google Search',
+  'agent.webSearch': 'Web search',
+
+  'plus.menu': 'Add files and connectors',
+  'plus.addFile': 'Add files',
+  'plus.addImage': 'Add images',
+  'plus.comingSoon': 'Coming soon',
+  'plus.connectors': 'Connectors',
+  'plus.connectorsHint': 'The assistant uses only what is turned on',
+  'model.label': 'Model',
 
   'hitl.confirmTitle': 'Approve {tool}?',
   'hitl.inputTitle': 'Input needed',

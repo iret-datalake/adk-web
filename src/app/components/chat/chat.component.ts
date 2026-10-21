@@ -61,6 +61,8 @@ import {getLogoConfig} from '../../core/models/RuntimeConfig';
 import {HitlResolution} from '../hitl-request/hitl-request.component';
 import {InstructionDiffDialogComponent} from '../instruction-diff-dialog/instruction-diff-dialog.component';
 import {DevModeService} from '../../core/services/dev-mode.service';
+import {PlatformService} from '../../core/services/platform.service';
+import {MODEL_OPTIONS, PLATFORMS} from '../../core/models/Platform';
 import {ThemeService} from '../../core/services/theme.service';
 
 function fixBase64String(base64: string): string {
@@ -111,6 +113,7 @@ const AGENT_TOOL_NAMES: Record<string, string> = {
 const AGENT_TOOL_LABEL_KEYS: Record<string, MessageKey> = {
   sub_agent_glossary: 'agent.glossary',
   sub_agent_google_search: 'agent.googleSearch',
+  web_search: 'agent.webSearch',
 };
 
 /** error_code ADK puts on the events that seal a run stopped by the client. */
@@ -302,6 +305,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   protected readonly i18n = inject(I18nService);
   protected readonly themeService = inject(ThemeService);
   protected readonly devMode = inject(DevModeService);
+  protected readonly platformService = inject(PlatformService);
+  protected readonly platforms = PLATFORMS;
+  protected readonly modelOptions = MODEL_OPTIONS;
+  protected selectedModel = MODEL_OPTIONS[0];
   protected readonly logo = getLogoConfig();
 
   // Load apps
@@ -642,6 +649,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       },
       streaming: this.useSse,
       thinkingMode: this.thinkingMode,
+      enabledPlatforms: this.platformService.enabledIds(),
     };
     this.selectedFiles = [];
     this.runSseWithAuthRetry(req);
@@ -2309,6 +2317,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       },
       streaming: this.useSse,
       thinkingMode: this.thinkingMode,
+      enabledPlatforms: this.platformService.enabledIds(),
     };
     this.runSseWithAuthRetry(req);
   }

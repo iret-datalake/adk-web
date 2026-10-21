@@ -25,4 +25,6 @@ export interface AgentRunRequest {
   functionCallEventId?: string;
   streaming?: boolean;
   thinkingMode?: ThinkingMode;
+  /** Ids of the platforms turned on in the + menu (see Platform.ts). */
+  enabledPlatforms?: string[];
 }
