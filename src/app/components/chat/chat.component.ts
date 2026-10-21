@@ -99,6 +99,7 @@ const BIDI_STREAMING_RESTART_WARNING =
   'Restarting bidirectional streaming is not currently supported. Please refresh the page or start a new session.';
 
 const THINKING_MODE_STORAGE_KEY = 'adk-web.thinkingMode';
+const TOKEN_STREAMING_STORAGE_KEY = 'adk-web.tokenStreaming';
 
 /** Display names for the root agent's platform tools (sub-agents). */
 const AGENT_TOOL_NAMES: Record<string, string> = {
@@ -121,6 +122,11 @@ const INVOCATION_ABORTED = 'INVOCATION_ABORTED';
 
 /** Session state key the backend stores answer ratings under. */
 const MESSAGE_FEEDBACK_STATE_KEY = 'message_feedback';
+
+/** Token streaming ends a response with an empty text part, which has nothing to show. */
+function isEmptyTextPart(part: any): boolean {
+  return part?.text === '' && Object.keys(part).every((key) => key === 'text' || key === 'thought');
+}
 
 /** The system instruction of an LLM request (a string or a Content). */
 function systemInstructionText(request: any): string | null {
@@ -209,7 +215,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   messages: any[] = [];
   lastTextChunk: string = '';
   streamingTextMessage: any | null = null;
-  latestThought: string = '';
+  /** The thought message being streamed (token streaming), until its final event. */
+  streamingThoughtMessage: any | null = null;
   artifacts: any[] = [];
   userInput: string = '';
   userEditEvalCaseMessage: string = '';
@@ -231,7 +238,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   functionCallEventId = '';
   redirectUri = URLUtil.getBaseUrlWithoutPath();
   showSidePanel = true;
-  useSse = false;
+  /** Token streaming (settings menu): show answers and thoughts while they are generated. */
+  useSse = this.loadTokenStreaming();
   readonly thinkingModeOptions: {value: ThinkingMode, label: MessageKey, tooltip: MessageKey}[] = [
     {value: 'fast', label: 'mode.fast', tooltip: 'mode.fastTooltip'},
     {value: 'standard', label: 'mode.standard', tooltip: 'mode.standardTooltip'},
@@ -664,6 +672,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {
     let index = this.eventMessageIndexArray.length - 1;
     this.streamingTextMessage = null;
+    this.streamingThoughtMessage = null;
     let sessionBriefRefreshQueued = false;
     const authRetryCount = options?.authRetryCount ?? 0;
     const subscription: Subscription = this.agentService.runSse(req).subscribe({
@@ -724,6 +733,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         // An auth retry may already have started the next request; keep that one.
         this.clearActiveSseSubscription(subscription);
         this.streamingTextMessage = null;
+        this.streamingThoughtMessage = null;
         if (sessionBriefRefreshQueued) {
           this.requestSessionBriefRefresh();
         }
@@ -918,6 +928,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.isModelThinkingSubject.next(false);
     this.streamingTextMessage = null;
+    this.streamingThoughtMessage = null;
     this.insertMessageBeforeLoadingMessage(this.stoppedNoticeMessage());
     this.changeDetectorRef.detectChanges();
     this.syncAfterAgentRun();
@@ -1211,7 +1222,14 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private processPart(chunkJson: any, part: any, index: number) {
+    if (isEmptyTextPart(part)) {
+      return;
+    }
     if (part.text && this.isDelegatedSubAgentEvent(chunkJson)) {
+      if (chunkJson.partial) {
+        // A sub-agent's text is stored once, from its final event.
+        return;
+      }
       this.storeEvents(part, chunkJson, index);
       this.eventMessageIndexArray[index] = part.text;
       return;
@@ -1222,56 +1240,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (part.text) {
       this.isModelThinkingSubject.next(false);
-      const newChunk = part.text;
-      if (part.thought) {
-        if (newChunk !== this.latestThought) {
-          this.storeEvents(part, chunkJson, index);
-          let thoughtMessage = {
-            role: 'bot',
-            text: this.processThoughtText(newChunk),
-            thought: true,
-            eventId: chunkJson.id
-          };
-
-          this.insertMessageBeforeLoadingMessage(thoughtMessage);
-        }
-        this.latestThought = newChunk;
-      } else if (!this.streamingTextMessage) {
-        this.streamingTextMessage = {
-          role: 'bot',
-          text: this.processThoughtText(newChunk),
-          thought: part.thought ? true : false,
-          eventId: chunkJson.id
-        };
-
-        if (renderedContent) {
-          this.streamingTextMessage.renderedContent =
-            chunkJson.groundingMetadata.searchEntryPoint.renderedContent;
-        }
-
-        this.insertMessageBeforeLoadingMessage(this.streamingTextMessage);
-
-        if (!this.useSse) {
-          this.storeEvents(part, chunkJson, index);
-          this.eventMessageIndexArray[index] = newChunk;
-          this.streamingTextMessage = null;
-          return;
-        }
-      } else {
-        if (renderedContent) {
-          this.streamingTextMessage.renderedContent =
-            chunkJson.groundingMetadata.searchEntryPoint.renderedContent;
-        }
-
-        if (newChunk == this.streamingTextMessage.text) {
-          this.storeEvents(part, chunkJson, index);
-          this.eventMessageIndexArray[index] = newChunk;
-          this.streamingTextMessage = null;
-          return;
-        }
-        this.streamingTextMessage.text += newChunk;
-        this.streamingTextMessageSubject.next(this.streamingTextMessage);
-      }
+      this.processTextPart(chunkJson, part, index, renderedContent);
     } else if (!part.thought) {
       this.isModelThinkingSubject.next(false);
       this.storeEvents(part, chunkJson, index);
@@ -1279,6 +1248,71 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         part, chunkJson, index, chunkJson.author === 'user' ? 'user' : 'bot');
     } else {
       this.isModelThinkingSubject.next(true);
+    }
+  }
+
+  /**
+   * Shows a text or thought part. With token streaming, the partial events of
+   * one model response share its event id: their chunks are appended to one
+   * thought message and one answer message, and the final event (which repeats
+   * the whole text) only replaces their text instead of adding messages.
+   */
+  private processTextPart(chunkJson: any, part: any, index: number, renderedContent?: string) {
+    const thought = !!part.thought;
+    // Strips planner markers (/*PLANNING*/ ...), as before for both kinds.
+    const text = this.processThoughtText(part.text);
+    const streamed = thought ? this.streamingThoughtMessage : this.streamingTextMessage;
+    const sameResponse = streamed?.eventId === chunkJson.id;
+
+    if (chunkJson.partial) {
+      if (sameResponse) {
+        streamed.text += text;
+      } else {
+        const message: any = {role: 'bot', text, thought, eventId: chunkJson.id};
+        if (thought) {
+          this.streamingThoughtMessage = message;
+        } else {
+          this.streamingTextMessage = message;
+        }
+        this.insertMessageBeforeLoadingMessage(message);
+      }
+      if (renderedContent && !thought) {
+        this.streamingTextMessage.renderedContent = renderedContent;
+      }
+      this.streamingTextMessageSubject.next(this.streamingTextMessage);
+      return;
+    }
+
+    this.storeEvents(part, chunkJson, index);
+    this.eventMessageIndexArray[index] = part.text;
+    if (sameResponse) {
+      // The final event: keep the streamed message, with the complete text.
+      streamed.text = text;
+      if (renderedContent && !thought) {
+        streamed.renderedContent = renderedContent;
+      }
+      if (thought) {
+        this.streamingThoughtMessage = null;
+      } else {
+        this.streamingTextMessage = null;
+      }
+      this.messagesSubject.next(this.messages);
+      return;
+    }
+
+    const message: any = {role: 'bot', text, thought, eventId: chunkJson.id};
+    if (renderedContent && !thought) {
+      message.renderedContent = renderedContent;
+    }
+    // A thought that only arrives with the final event goes before the answer
+    // already streamed for the same response.
+    const answerIndex = thought && this.streamingTextMessage?.eventId === chunkJson.id ?
+        this.messages.indexOf(this.streamingTextMessage) : -1;
+    if (answerIndex >= 0) {
+      this.messages.splice(answerIndex, 0, message);
+      this.messagesSubject.next(this.messages);
+    } else {
+      this.insertMessageBeforeLoadingMessage(message);
     }
   }
 
@@ -1869,6 +1903,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       event.content?.parts?.forEach((part: any) => {
         if (part.text && this.isDelegatedSubAgentEvent(event)) {
           this.eventMessageIndexArray[index] = part.text;
+        } else if (isEmptyTextPart(part)) {
+          // Nothing to show.
         } else {
           this.storeMessage(
             part, event, index, event.author === 'user' ? 'user' : 'bot');
@@ -2628,10 +2664,16 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
 
-  /** First line of a thought summary (e.g. "**Planning the search**"), shown while collapsed. */
+  /**
+   * The latest heading of a thought summary (e.g. "**Planning the search**"),
+   * shown while collapsed. A streamed thought grows heading by heading, so the
+   * latest one tells what the model is thinking about now.
+   */
   thoughtTitle(text: string | undefined): string {
-    const firstLine = (text ?? '').trim().split('\n')[0] ?? '';
-    return firstLine.replace(/^\*\*(.+)\*\*$/, '$1').trim();
+    const lines = (text ?? '').trim().split('\n').map((line) => line.trim());
+    const headings = lines.filter((line) => /^\*\*.+\*\*$/.test(line));
+    const title = headings.length ? headings[headings.length - 1] : lines[0] ?? '';
+    return title.replace(/^\*\*(.+)\*\*$/, '$1').trim();
   }
 
   thinkingModeIndex(): number {
@@ -2657,6 +2699,24 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       // Fall back to the default below.
     }
     return 'standard';
+  }
+
+  /** On unless the user turned it off. */
+  private loadTokenStreaming(): boolean {
+    try {
+      return localStorage.getItem(TOKEN_STREAMING_STORAGE_KEY) !== 'false';
+    } catch {
+      return true;
+    }
+  }
+
+  setTokenStreaming(enabled: boolean) {
+    this.useSse = enabled;
+    try {
+      localStorage.setItem(TOKEN_STREAMING_STORAGE_KEY, String(enabled));
+    } catch {
+      // Storage can be unavailable (private mode); the choice then lasts for this page only.
+    }
   }
 
   toggleSse() {
