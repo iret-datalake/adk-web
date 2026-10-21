@@ -2727,6 +2727,19 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  /** Leaves the open session if the session list just deleted it. */
+  protected onSessionsDeleted(sessionIds: string[]) {
+    if (!sessionIds.includes(this.sessionId)) {
+      return;
+    }
+    const nextSession = this.sessionTab.sessionList[0];
+    if (nextSession) {
+      this.sessionTab.getSession(nextSession.id);
+    } else {
+      window.location.reload();
+    }
+  }
+
   private syncSelectedAppFromUrl() {
     combineLatest([
       this.router.events.pipe(

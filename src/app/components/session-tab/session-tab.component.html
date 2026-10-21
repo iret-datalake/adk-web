@@ -15,23 +15,231 @@
 -->
 
 <div class="session-wrapper">
-  <div class="session-tab-container" style="margin-top: 16px;">
-    @for (session of sessionList; track session) {
-      <div (click)="getSession(session.id)" [ngClass]="session.id === sessionId ? 'session-item current': 'session-item'">
-        <div class="session-info">
-          <ng-container *ngIf="getBrief(session) as brief">
-            <div class="session-brief">
-              {{ brief }}
-            </div>
-          </ng-container>
-          <div class="session-id">
-            {{session.id}}
+  <div class="session-toolbar">
+    @if (selectMode) {
+      <mat-checkbox
+        [checked]="selectionOf(sessionList) === 'all'"
+        [indeterminate]="selectionOf(sessionList) === 'some'"
+        (change)="toggleSelectedAll(sessionList)"
+      >
+        {{ 'sessions.selectedCount' | t: {count: selectedIds.size} }}
+      </mat-checkbox>
+      <span class="toolbar-spacer"></span>
+      <button
+        mat-icon-button
+        [disabled]="!selectedIds.size"
+        [matTooltip]="'sessions.moveToFolder' | t"
+        [matMenuTriggerFor]="folderMenu"
+        [matMenuTriggerData]="{ids: undefined}"
+      >
+        <mat-icon>drive_file_move</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        [disabled]="!selectedIds.size"
+        [matTooltip]="'sessions.delete' | t"
+        (click)="deleteSessions()"
+      >
+        <mat-icon>delete</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        [matTooltip]="'sessions.cancel' | t"
+        (click)="exitSelectMode()"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    } @else {
+      <button mat-button (click)="startSelectMode()" [disabled]="!sessionList.length">
+        <mat-icon>checklist</mat-icon>
+        {{ 'sessions.select' | t }}
+      </button>
+      <button mat-button (click)="startCreateFolder()">
+        <mat-icon>create_new_folder</mat-icon>
+        {{ 'sessions.newFolder' | t }}
+      </button>
+    }
+  </div>
+
+  @if (creatingFolder) {
+    <ng-container
+      *ngTemplateOutlet="folderNameInput; context: {icon: 'create_new_folder'}"
+    ></ng-container>
+  }
+
+  <div class="session-tab-container">
+    @for (group of groups; track group.folder?.id ?? '') {
+      @if (group.folder; as folder) {
+        @if (renamingFolderId === folder.id) {
+          <ng-container
+            *ngTemplateOutlet="folderNameInput; context: {icon: 'folder'}"
+          ></ng-container>
+        } @else {
+          <div class="folder-header" (click)="toggleCollapsed(folder)">
+            @if (selectMode && group.sessions.length) {
+              <mat-checkbox
+                [checked]="selectionOf(group.sessions) === 'all'"
+                [indeterminate]="selectionOf(group.sessions) === 'some'"
+                (click)="$event.stopPropagation()"
+                (change)="toggleSelectedAll(group.sessions)"
+              ></mat-checkbox>
+            }
+            <mat-icon class="folder-chevron">
+              {{ isCollapsed(folder) ? 'chevron_right' : 'expand_more' }}
+            </mat-icon>
+            <mat-icon class="folder-icon">
+              {{ isCollapsed(folder) ? 'folder' : 'folder_open' }}
+            </mat-icon>
+            <span class="folder-name">{{ folder.name }}</span>
+            <span class="folder-count">{{ group.sessions.length }}</span>
+            <button
+              mat-icon-button
+              class="row-action"
+              [matTooltip]="'sessions.more' | t"
+              [matMenuTriggerFor]="folderActionsMenu"
+              [matMenuTriggerData]="{folder: folder}"
+              (click)="$event.stopPropagation()"
+            >
+              <mat-icon>more_vert</mat-icon>
+            </button>
           </div>
-          <div class="session-date">
-            {{ getDate(session) }}
+        }
+        @if (!isCollapsed(folder)) {
+          <div class="folder-sessions">
+            @for (session of group.sessions; track session.id) {
+              <ng-container
+                *ngTemplateOutlet="sessionItem; context: {$implicit: session}"
+              ></ng-container>
+            } @empty {
+              <div class="folder-empty">{{ 'sessions.emptyFolder' | t }}</div>
+            }
           </div>
-        </div>
-      </div>
+        }
+      } @else {
+        @if (folders.length && group.sessions.length) {
+          <div class="unfiled-header">{{ 'sessions.unfiled' | t }}</div>
+        }
+        @for (session of group.sessions; track session.id) {
+          <ng-container
+            *ngTemplateOutlet="sessionItem; context: {$implicit: session}"
+          ></ng-container>
+        }
+      }
     }
   </div>
 </div>
+
+<ng-template #sessionItem let-session>
+  <div
+    (click)="onSessionClick(session)"
+    class="session-item"
+    [class.current]="session.id === sessionId"
+    [class.selected]="selectMode && selectedIds.has(session.id)"
+  >
+    @if (selectMode) {
+      <mat-checkbox
+        class="session-checkbox"
+        [checked]="selectedIds.has(session.id)"
+        (click)="$event.stopPropagation()"
+        (change)="toggleSelected(session.id)"
+      ></mat-checkbox>
+    }
+    <div class="session-info">
+      <ng-container *ngIf="getBrief(session) as brief">
+        <div class="session-brief">
+          {{ brief }}
+        </div>
+      </ng-container>
+      <div class="session-id">
+        {{session.id}}
+      </div>
+      <div class="session-date">
+        {{ getDate(session) }}
+      </div>
+    </div>
+    @if (!selectMode) {
+      <button
+        mat-icon-button
+        class="row-action"
+        [matTooltip]="'sessions.more' | t"
+        [matMenuTriggerFor]="sessionActionsMenu"
+        [matMenuTriggerData]="{id: session.id}"
+        (click)="$event.stopPropagation()"
+      >
+        <mat-icon>more_vert</mat-icon>
+      </button>
+    }
+  </div>
+</ng-template>
+
+<ng-template #folderNameInput let-icon="icon">
+  <div class="folder-name-input">
+    <mat-icon class="folder-icon">{{ icon }}</mat-icon>
+    <input
+      #nameInput
+      [placeholder]="'sessions.folderName' | t"
+      [(ngModel)]="folderNameDraft"
+      maxlength="255"
+      (keydown.enter)="submitFolderName()"
+      (keydown.escape)="cancelFolderEdit()"
+      (blur)="submitFolderName()"
+    />
+  </div>
+</ng-template>
+
+<mat-menu #sessionActionsMenu="matMenu">
+  <ng-template matMenuContent let-id="id">
+    <button
+      mat-menu-item
+      [matMenuTriggerFor]="folderMenu"
+      [matMenuTriggerData]="{ids: [id]}"
+    >
+      <mat-icon>drive_file_move</mat-icon>
+      <span>{{ 'sessions.moveToFolder' | t }}</span>
+    </button>
+    <button mat-menu-item (click)="deleteSessions([id])">
+      <mat-icon>delete</mat-icon>
+      <span>{{ 'sessions.delete' | t }}</span>
+    </button>
+  </ng-template>
+</mat-menu>
+
+<mat-menu #folderMenu="matMenu">
+  <ng-template matMenuContent let-ids="ids">
+    @for (folder of folders; track folder.id) {
+      <button
+        mat-menu-item
+        [disabled]="ids?.length === 1 && folderIdOf(ids[0]) === folder.id"
+        (click)="moveSessions(ids, folder.id)"
+      >
+        <mat-icon>folder</mat-icon>
+        <span>{{ folder.name }}</span>
+      </button>
+    } @empty {
+      <button mat-menu-item disabled>{{ 'sessions.noFolders' | t }}</button>
+    }
+    @if (folders.length) {
+      <button
+        mat-menu-item
+        [disabled]="ids?.length === 1 && !folderIdOf(ids[0])"
+        (click)="moveSessions(ids, null)"
+      >
+        <mat-icon>folder_off</mat-icon>
+        <span>{{ 'sessions.removeFromFolder' | t }}</span>
+      </button>
+    }
+  </ng-template>
+</mat-menu>
+
+<mat-menu #folderActionsMenu="matMenu">
+  <ng-template matMenuContent let-folder="folder">
+    <button mat-menu-item (click)="startRenameFolder(folder)">
+      <mat-icon>edit</mat-icon>
+      <span>{{ 'sessions.renameFolder' | t }}</span>
+    </button>
+    <button mat-menu-item (click)="deleteFolder(folder)">
+      <mat-icon>delete</mat-icon>
+      <span>{{ 'sessions.deleteFolder' | t }}</span>
+    </button>
+  </ng-template>
+</mat-menu>

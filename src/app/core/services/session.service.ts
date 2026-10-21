@@ -33,6 +33,16 @@ export interface MessageFeedback extends MessageFeedbackInput {
   updated_at?: string;
 }
 
+export interface SessionFolder {
+  id: string;
+  name: string;
+}
+
+export interface SessionFolders {
+  folders: SessionFolder[];
+  assignments: Record<string, string>;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -64,6 +74,55 @@ export class SessionService {
         `/apps/${appName}/users/${userId}/sessions/${sessionId}`;
 
     return this.http.delete<any>(url);
+  }
+
+  deleteSessions(userId: string, appName: string, sessionIds: string[]) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/sessions:batchDelete`;
+
+    return this.http.post<{deleted: string[]; failed: string[]}>(
+        url, {sessionIds});
+  }
+
+  /** The user's folders and a sessionId -> folderId map of filed sessions. */
+  listSessionFolders(userId: string, appName: string) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/session-folders`;
+
+    return this.http.get<SessionFolders>(url);
+  }
+
+  createSessionFolder(userId: string, appName: string, name: string) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/session-folders`;
+
+    return this.http.post<SessionFolder>(url, {name});
+  }
+
+  renameSessionFolder(
+      userId: string, appName: string, folderId: string, name: string) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/session-folders/${folderId}`;
+
+    return this.http.patch<SessionFolder>(url, {name});
+  }
+
+  /** Deletes the folder only; its sessions become unfiled. */
+  deleteSessionFolder(userId: string, appName: string, folderId: string) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/session-folders/${folderId}`;
+
+    return this.http.delete<void>(url);
+  }
+
+  /** Puts the sessions in `folderId`, or takes them out of any folder. */
+  moveSessionsToFolder(
+      userId: string, appName: string, sessionIds: string[],
+      folderId: string|null) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/sessions:moveToFolder`;
+
+    return this.http.post<void>(url, {sessionIds, folderId});
   }
 
   getSession(userId: string, appName: string, sessionId: string) {
