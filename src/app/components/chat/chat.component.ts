@@ -1835,6 +1835,19 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showSidePanel = !this.showSidePanel;
   }
 
+  // mat-drawer only closes on Escape while focus is inside it, so also close it
+  // when focus is elsewhere (e.g. right after starting a new session). Skip if
+  // a dialog/menu/drawer already handled the key or the user is typing.
+  @HostListener('document:keydown.escape', ['$event'])
+  onDocumentEscape(event: KeyboardEvent) {
+    if (!this.showSidePanel || event.defaultPrevented) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('input, textarea, select, [contenteditable="true"]')) {
+      return;
+    }
+    this.sideDrawer.close();
+  }
+
   protected handleTabChange(event: any) {
     if (!this.isChatMode()) {
       this.resetEditEvalCaseVars();
