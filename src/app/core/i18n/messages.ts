@@ -215,6 +215,12 @@ const JA = {
   'sessions.deleteMessage': '{count} 件のセッションを削除します。元に戻せません。',
   'sessions.deleteFailed': '{count} 件のセッションを削除できませんでした',
   'sessions.folderFailed': 'フォルダを更新できませんでした',
+  'sessions.archive': 'アーカイブ',
+  'sessions.archiveSession': 'アーカイブに移動',
+  'sessions.unarchiveSession': 'アーカイブから戻す',
+  'sessions.renameSession': 'タイトルを変更',
+  'sessions.titlePlaceholder': 'タイトル（空欄で自動生成に戻す）',
+  'sessions.titleFailed': 'タイトルを変更できませんでした',
 };
 
 export type MessageKey = keyof typeof JA;
@@ -416,6 +422,12 @@ const EN: Record<MessageKey, string> = {
   'sessions.deleteMessage': 'Delete {count} session(s)? This cannot be undone.',
   'sessions.deleteFailed': 'Could not delete {count} session(s)',
   'sessions.folderFailed': 'Could not update the folder',
+  'sessions.archive': 'Archive',
+  'sessions.archiveSession': 'Archive',
+  'sessions.unarchiveSession': 'Move out of the archive',
+  'sessions.renameSession': 'Rename',
+  'sessions.titlePlaceholder': 'Title (leave blank for the generated one)',
+  'sessions.titleFailed': 'Could not rename the session',
 };
 
 export const MESSAGES: Record<Language, Record<MessageKey, string>> = {

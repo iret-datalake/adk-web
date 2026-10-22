@@ -75,7 +75,11 @@
             *ngTemplateOutlet="folderNameInput; context: {icon: 'folder'}"
           ></ng-container>
         } @else {
-          <div class="folder-header" (click)="toggleCollapsed(folder)">
+          <div
+            class="folder-header"
+            [class.archive]="folder.kind === 'archive'"
+            (click)="toggleCollapsed(folder)"
+          >
             @if (selectMode && group.sessions.length) {
               <mat-checkbox
                 [checked]="selectionOf(group.sessions) === 'all'"
@@ -87,21 +91,27 @@
             <mat-icon class="folder-chevron">
               {{ isCollapsed(folder) ? 'chevron_right' : 'expand_more' }}
             </mat-icon>
-            <mat-icon class="folder-icon">
-              {{ isCollapsed(folder) ? 'folder' : 'folder_open' }}
-            </mat-icon>
-            <span class="folder-name">{{ folder.name }}</span>
-            <span class="folder-count">{{ group.sessions.length }}</span>
-            <button
-              mat-icon-button
-              class="row-action"
-              [matTooltip]="'sessions.more' | t"
-              [matMenuTriggerFor]="folderActionsMenu"
-              [matMenuTriggerData]="{folder: folder}"
-              (click)="$event.stopPropagation()"
-            >
-              <mat-icon>more_vert</mat-icon>
-            </button>
+            @if (folder.kind === 'archive') {
+              <mat-icon class="folder-icon">archive</mat-icon>
+              <span class="folder-name">{{ 'sessions.archive' | t }}</span>
+              <span class="folder-count">{{ group.sessions.length }}</span>
+            } @else {
+              <mat-icon class="folder-icon">
+                {{ isCollapsed(folder) ? 'folder' : 'folder_open' }}
+              </mat-icon>
+              <span class="folder-name">{{ folder.name }}</span>
+              <span class="folder-count">{{ group.sessions.length }}</span>
+              <button
+                mat-icon-button
+                class="row-action"
+                [matTooltip]="'sessions.more' | t"
+                [matMenuTriggerFor]="folderActionsMenu"
+                [matMenuTriggerData]="{folder: folder}"
+                (click)="$event.stopPropagation()"
+              >
+                <mat-icon>more_vert</mat-icon>
+              </button>
+            }
           </div>
         }
         @if (!isCollapsed(folder)) {
@@ -116,7 +126,7 @@
           </div>
         }
       } @else {
-        @if (folders.length && group.sessions.length) {
+        @if (userFolders.length && group.sessions.length) {
           <div class="unfiled-header">{{ 'sessions.unfiled' | t }}</div>
         }
         @for (session of group.sessions; track session.id) {
@@ -145,11 +155,25 @@
       ></mat-checkbox>
     }
     <div class="session-info">
-      <ng-container *ngIf="getBrief(session) as brief">
-        <div class="session-brief">
-          {{ brief }}
-        </div>
-      </ng-container>
+      @if (renamingSessionId === session.id) {
+        <input
+          #nameInput
+          class="title-input"
+          [placeholder]="'sessions.titlePlaceholder' | t"
+          [(ngModel)]="titleDraft"
+          maxlength="255"
+          (click)="$event.stopPropagation()"
+          (keydown.enter)="submitSessionTitle()"
+          (keydown.escape)="cancelSessionRename()"
+          (blur)="submitSessionTitle()"
+        />
+      } @else {
+        @if (getTitle(session); as title) {
+          <div class="session-brief">
+            {{ title }}
+          </div>
+        }
+      }
       <div class="session-id">
         {{session.id}}
       </div>
@@ -157,7 +181,25 @@
         {{ getDate(session) }}
       </div>
     </div>
-    @if (!selectMode) {
+    @if (!selectMode && renamingSessionId !== session.id) {
+      <button
+        mat-icon-button
+        class="row-action"
+        [matTooltip]="'sessions.renameSession' | t"
+        (click)="$event.stopPropagation(); startRenameSession(session)"
+      >
+        <mat-icon>edit</mat-icon>
+      </button>
+      @if (archiveFolder) {
+        <button
+          mat-icon-button
+          class="row-action"
+          [matTooltip]="(isArchived(session.id) ? 'sessions.unarchiveSession' : 'sessions.archiveSession') | t"
+          (click)="$event.stopPropagation(); toggleArchived(session.id)"
+        >
+          <mat-icon>{{ isArchived(session.id) ? 'unarchive' : 'archive' }}</mat-icon>
+        </button>
+      }
       <button
         mat-icon-button
         class="row-action"
@@ -206,7 +248,7 @@
 
 <mat-menu #folderMenu="matMenu">
   <ng-template matMenuContent let-ids="ids">
-    @for (folder of folders; track folder.id) {
+    @for (folder of userFolders; track folder.id) {
       <button
         mat-menu-item
         [disabled]="ids?.length === 1 && folderIdOf(ids[0]) === folder.id"
@@ -217,6 +259,16 @@
       </button>
     } @empty {
       <button mat-menu-item disabled>{{ 'sessions.noFolders' | t }}</button>
+    }
+    @if (archiveFolder; as archive) {
+      <button
+        mat-menu-item
+        [disabled]="ids?.length === 1 && folderIdOf(ids[0]) === archive.id"
+        (click)="moveSessions(ids, archive.id)"
+      >
+        <mat-icon>archive</mat-icon>
+        <span>{{ 'sessions.archive' | t }}</span>
+      </button>
     }
     @if (folders.length) {
       <button

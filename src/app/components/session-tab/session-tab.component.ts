@@ -52,6 +52,8 @@ export class SessionTabComponent implements OnInit {
   folders: SessionFolder[] = [];
   /** sessionId -> folderId for the sessions that are in a folder. */
   assignments: Record<string, string> = {};
+  /** sessionId -> title the user wrote; it wins over the generated brief. */
+  titles: Record<string, string> = {};
 
   selectMode = false;
   readonly selectedIds = new Set<string>();
@@ -59,6 +61,10 @@ export class SessionTabComponent implements OnInit {
   creatingFolder = false;
   renamingFolderId: string|null = null;
   folderNameDraft = '';
+  renamingSessionId: string|null = null;
+  titleDraft = '';
+  /** The archive starts collapsed, but only the first time it is seen. */
+  private archiveSeen = false;
 
   /** Focuses the folder name input as soon as it is shown. */
   @ViewChild('nameInput')
@@ -103,7 +109,16 @@ export class SessionTabComponent implements OnInit {
     }, 500);
   }
 
-  /** Folders (in creation order) then the unfiled sessions. */
+  /** The user's own folders (everything but the archive). */
+  get userFolders(): SessionFolder[] {
+    return this.folders.filter((folder) => folder.kind !== 'archive');
+  }
+
+  get archiveFolder(): SessionFolder|undefined {
+    return this.folders.find((folder) => folder.kind === 'archive');
+  }
+
+  /** The user's folders, the unfiled sessions, then the archive. */
   get groups(): SessionGroup[] {
     const key = [this.sessionList, this.folders, this.assignments];
     if (this.groupsCache &&
@@ -117,10 +132,13 @@ export class SessionTabComponent implements OnInit {
       const folderSessions = byFolder.get(this.assignments[session.id]);
       (folderSessions ?? unfiled).push(session);
     }
+    const archive = this.archiveFolder;
     const groups: SessionGroup[] = [
-      ...this.folders.map(
+      ...this.userFolders.map(
           (folder) => ({folder, sessions: byFolder.get(folder.id)!})),
       {folder: null, sessions: unfiled},
+      ...(archive ? [{folder: archive, sessions: byFolder.get(archive.id)!}] :
+                    []),
     ];
     this.groupsCache = {key, groups};
     return groups;
@@ -234,12 +252,14 @@ export class SessionTabComponent implements OnInit {
   }
 
   startCreateFolder() {
+    this.cancelSessionRename();
     this.renamingFolderId = null;
     this.creatingFolder = true;
     this.folderNameDraft = '';
   }
 
   startRenameFolder(folder: SessionFolder) {
+    this.cancelSessionRename();
     this.creatingFolder = false;
     this.renamingFolderId = folder.id;
     this.folderNameDraft = folder.name;
@@ -317,7 +337,9 @@ export class SessionTabComponent implements OnInit {
               }
             }
             this.assignments = assignments;
-            if (folderId) {
+            // Show where the sessions went, but archiving keeps them out of
+            // sight.
+            if (folderId && folderId !== this.archiveFolder?.id) {
               this.collapsedFolderIds.delete(folderId);
             }
             if (!ids) {
@@ -332,6 +354,70 @@ export class SessionTabComponent implements OnInit {
     return this.assignments[sessionId];
   }
 
+  isArchived(sessionId: string): boolean {
+    const archive = this.archiveFolder;
+    return !!archive && this.assignments[sessionId] === archive.id;
+  }
+
+  /** Moves the session into the archive, or back out of it. */
+  toggleArchived(sessionId: string) {
+    const archive = this.archiveFolder;
+    if (!archive) {
+      return;
+    }
+    this.moveSessions(
+        [sessionId], this.isArchived(sessionId) ? null : archive.id);
+  }
+
+  // --- Titles -----------------------------------------------------------
+
+  /** The user's title, else the generated brief. */
+  getTitle(session: any): string|null {
+    return this.titles[session?.id] ?? this.getBrief(session);
+  }
+
+  startRenameSession(session: any) {
+    this.cancelFolderEdit();
+    this.renamingSessionId = session.id;
+    this.titleDraft = this.getTitle(session) ?? '';
+  }
+
+  cancelSessionRename() {
+    this.renamingSessionId = null;
+    this.titleDraft = '';
+  }
+
+  /**
+   * Saves the title being edited. A blank one drops the user's title, so the
+   * generated brief shows (and is kept up to date) again.
+   */
+  submitSessionTitle() {
+    const sessionId = this.renamingSessionId;
+    if (!sessionId) {
+      return;
+    }
+    const title = this.titleDraft.trim();
+    const session = this.sessionList.find((s) => s.id === sessionId);
+    this.cancelSessionRename();
+    if (title === (this.getTitle(session) ?? '')) {
+      return;
+    }
+    this.sessionService
+        .setSessionTitle(this.userId, this.appName, sessionId, title || null)
+        .subscribe({
+          next: ({title: saved}) => {
+            const titles = {...this.titles};
+            if (saved) {
+              titles[sessionId] = saved;
+            } else {
+              delete titles[sessionId];
+            }
+            this.titles = titles;
+          },
+          error: () => this.notify(this.i18n.t('sessions.titleFailed')),
+        });
+  }
+
   private loadFolders(): Observable<SessionFolders> {
     // Folders are an extra; the session list must still load without them.
     return this.sessionService.listSessionFolders(this.userId, this.appName)
@@ -342,9 +428,15 @@ export class SessionTabComponent implements OnInit {
     this.loadFolders().subscribe((folders) => this.applyFolders(folders));
   }
 
-  private applyFolders({folders, assignments}: SessionFolders) {
+  private applyFolders({folders, assignments, titles}: SessionFolders) {
     this.folders = folders ?? [];
     this.assignments = assignments ?? {};
+    this.titles = titles ?? {};
+    const archive = this.archiveFolder;
+    if (archive && !this.archiveSeen) {
+      this.archiveSeen = true;
+      this.collapsedFolderIds.add(archive.id);
+    }
   }
 
   private confirm(title: string, message: string, confirmButtonText: string) {
