@@ -65,6 +65,7 @@ import {InstructionDiffDialogComponent} from './instruction-diff-dialog/instruct
 import {JsonEditorComponent} from './json-editor/json-editor.component';
 import {DeleteSessionDialogComponent} from './session-tab/delete-session-dialog/delete-session-dialog.component';
 import {SessionTabComponent} from './session-tab/session-tab.component';
+import {SettingsDialogComponent} from './settings-dialog/settings-dialog.component';
 import {StateHistoryComponent} from './state-history/state-history.component';
 import {StateTabComponent} from './state-tab/state-tab.component';
 import {TraceEventComponent} from './trace-tab/trace-event/trace-event.component';
@@ -81,6 +82,7 @@ const COMPONENTS = [
   AddEvalSessionDialogComponent,
   ArtifactTabComponent,
   DeleteSessionDialogComponent,
+  SettingsDialogComponent,
   StateTabComponent,
   StateHistoryComponent,
   TraceChartComponent,
