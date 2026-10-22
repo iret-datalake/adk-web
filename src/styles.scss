@@ -244,30 +244,6 @@ markdown img {
   cursor: zoom-in;
 }
 
-// Display settings (language / theme) in the toolbar menu.
-.settings-menu .settings-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 16px 12px;
-}
-
-.settings-menu .settings-label {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--app-text-secondary);
-}
-
-.settings-menu .settings-dev-mode {
-  margin-top: 8px;
-  font-size: 13px;
-}
-
-.settings-menu .settings-hint {
-  font-size: 11px;
-  color: var(--app-text-tertiary);
-}
-
 // Chat input + menu: upload placeholders and the platform switches.
 .plus-menu {
   min-width: 260px !important;
@@ -330,24 +306,29 @@ markdown img {
   white-space: pre-line;
 }
 
-.settings-menu .settings-toggle {
-  .mat-button-toggle {
-    flex: 1;
+// Settings dialog (SettingsDialogComponent); the toggles' inner elements are
+// out of reach of the component's encapsulated styles.
+.settings-dialog-panel {
+  .mat-mdc-dialog-surface {
+    border-radius: 16px;
+    background-color: var(--app-surface);
   }
 
-  .mat-button-toggle-label-content {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 0 14px;
-    font-size: 13px;
-  }
+  .settings-toggle {
+    .mat-button-toggle-label-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 0 14px;
+      font-size: 13px;
+    }
 
-  .mat-icon {
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
+    .mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
   }
 }
 

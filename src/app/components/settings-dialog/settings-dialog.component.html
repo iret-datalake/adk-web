@@ -1,0 +1,154 @@
+<!--
+ Copyright 2025 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<div class="settings-dialog">
+  <div class="settings-header">
+    <h2 class="settings-title">{{ 'settings.title' | t }}</h2>
+    <button mat-icon-button [attr.aria-label]="'settings.close' | t" (click)="dialogRef.close()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div class="settings-body">
+    <nav class="settings-nav">
+      @for (item of sections; track item.id) {
+        <button
+          class="settings-nav-item"
+          [class.active]="section() === item.id"
+          (click)="section.set(item.id)"
+        >
+          <mat-icon>{{ item.icon }}</mat-icon>
+          {{ item.label | t }}
+        </button>
+      }
+    </nav>
+
+    <div class="settings-content">
+      @switch (section()) {
+        @case ('general') {
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <div class="settings-row-label">{{ 'settings.language' | t }}</div>
+            </div>
+            <mat-button-toggle-group
+              class="settings-toggle"
+              [value]="i18n.language()"
+              (change)="i18n.setLanguage($event.value)"
+              hideSingleSelectionIndicator
+            >
+              <mat-button-toggle value="ja">日本語</mat-button-toggle>
+              <mat-button-toggle value="en">English</mat-button-toggle>
+            </mat-button-toggle-group>
+          </div>
+
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <div class="settings-row-label">{{ 'settings.theme' | t }}</div>
+            </div>
+            <mat-button-toggle-group
+              class="settings-toggle"
+              [value]="themeService.theme()"
+              (change)="themeService.setTheme($event.value)"
+              hideSingleSelectionIndicator
+            >
+              <mat-button-toggle value="light">
+                <mat-icon>light_mode</mat-icon>{{ 'settings.light' | t }}
+              </mat-button-toggle>
+              <mat-button-toggle value="dark">
+                <mat-icon>dark_mode</mat-icon>{{ 'settings.dark' | t }}
+              </mat-button-toggle>
+            </mat-button-toggle-group>
+          </div>
+
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <div class="settings-row-label">{{ 'settings.streaming' | t }}</div>
+              <div class="settings-row-hint">{{ 'settings.streamingHint' | t }}</div>
+            </div>
+            <mat-slide-toggle
+              [checked]="tokenStreaming.enabled()"
+              (change)="tokenStreaming.setEnabled($event.checked)"
+              [attr.aria-label]="'settings.streaming' | t"
+            ></mat-slide-toggle>
+          </div>
+
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <div class="settings-row-label">{{ 'settings.devMode' | t }}</div>
+              <div class="settings-row-hint">{{ 'settings.devModeHint' | t }}</div>
+            </div>
+            <mat-slide-toggle
+              [checked]="devMode.enabled()"
+              (change)="devMode.setEnabled($event.checked)"
+              [attr.aria-label]="'settings.devMode' | t"
+            ></mat-slide-toggle>
+          </div>
+        }
+
+        @case ('connections') {
+          <div class="settings-section-hint">{{ 'settings.connectionsHint' | t }}</div>
+
+          @if (loadingConnections() && connections().length === 0) {
+            <div class="settings-loading">
+              <mat-spinner diameter="24"></mat-spinner>
+            </div>
+          } @else if (connectionsError()) {
+            <div class="settings-error">
+              {{ 'settings.connectionsError' | t }}
+              <button mat-button (click)="loadConnections()">{{ 'settings.retry' | t }}</button>
+            </div>
+          } @else {
+            @for (row of connections(); track row.platform.id) {
+              <div class="settings-row">
+                <mat-icon class="connection-icon">{{ row.platform.icon }}</mat-icon>
+                <div class="settings-row-text">
+                  <div class="settings-row-label">{{ platformName(row.platform) }}</div>
+                  <div
+                    class="settings-row-hint connection-status"
+                    [class.connected]="row.connection.authType === 'oauth' && row.connection.connected"
+                  >
+                    {{ connectionStatus(row.connection) }}
+                  </div>
+                </div>
+                @if (row.connection.authType === 'oauth' && row.connection.enabled) {
+                  @if (busyPlatformId() === row.platform.id) {
+                    <mat-spinner diameter="20"></mat-spinner>
+                  } @else if (row.connection.connected) {
+                    <button
+                      mat-stroked-button
+                      [disabled]="busyPlatformId() !== null"
+                      (click)="disconnect(row)"
+                    >
+                      {{ 'settings.disconnect' | t }}
+                    </button>
+                  } @else {
+                    <button
+                      mat-flat-button
+                      [disabled]="busyPlatformId() !== null"
+                      (click)="connect(row)"
+                    >
+                      {{ 'settings.connect' | t }}
+                    </button>
+                  }
+                }
+              </div>
+            }
+          }
+        }
+      }
+    </div>
+  </div>
+</div>
