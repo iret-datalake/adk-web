@@ -36,11 +36,15 @@ export interface MessageFeedback extends MessageFeedbackInput {
 export interface SessionFolder {
   id: string;
   name: string;
+  /** 'archive' is the built-in archive folder (can't be renamed or deleted). */
+  kind?: 'folder'|'archive';
 }
 
 export interface SessionFolders {
   folders: SessionFolder[];
   assignments: Record<string, string>;
+  /** sessionId -> title the user wrote (wins over the generated brief). */
+  titles?: Record<string, string>;
 }
 
 @Injectable({
@@ -123,6 +127,16 @@ export class SessionService {
         `/apps/${appName}/users/${userId}/sessions:moveToFolder`;
 
     return this.http.post<void>(url, {sessionIds, folderId});
+  }
+
+  /** Saves the user's title; null or blank goes back to the generated brief. */
+  setSessionTitle(
+      userId: string, appName: string, sessionId: string, title: string|null) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/sessions/${sessionId}/title`;
+
+    return this.http.put<{sessionId: string; title?: string|null}>(
+        url, {title});
   }
 
   getSession(userId: string, appName: string, sessionId: string) {
