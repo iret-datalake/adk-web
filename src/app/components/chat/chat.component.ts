@@ -63,6 +63,7 @@ import {HitlResolution} from '../hitl-request/hitl-request.component';
 import {InstructionDiffDialogComponent} from '../instruction-diff-dialog/instruction-diff-dialog.component';
 import {DevModeService} from '../../core/services/dev-mode.service';
 import {TokenStreamingService} from '../../core/services/token-streaming.service';
+import {ConnectionService} from '../../core/services/connection.service';
 import {PlatformService} from '../../core/services/platform.service';
 import {MODEL_OPTIONS, PLATFORMS} from '../../core/models/Platform';
 import {ThemeService} from '../../core/services/theme.service';
@@ -314,6 +315,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
   protected readonly devMode = inject(DevModeService);
   private readonly tokenStreaming = inject(TokenStreamingService);
+  private readonly connectionService = inject(ConnectionService);
   protected readonly platformService = inject(PlatformService);
   protected readonly platforms = PLATFORMS;
   protected readonly modelOptions = MODEL_OPTIONS;
@@ -707,6 +709,29 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
               return;
             }
             this.openSnackBar('GitHub connected. Continuing your request...', 'OK');
+            this.runSseWithAuthRetry(req, { authRetryCount: authRetryCount + 1 });
+            return;
+          }
+          if (chunkJson.requiresAuth && chunkJson.authUrl) {
+            // Other OAuth platforms (Slack): the same popup as the settings dialog.
+            const platformId: string = chunkJson.requiresAuth;
+            const platformName = PLATFORMS.find((platform) => platform.id === platformId)?.name ?? platformId;
+            if (authRetryCount >= 1) {
+              this.openSnackBar(`${platformName} authorization did not complete. Please try again.`, 'OK');
+              return;
+            }
+
+            const connected = await this.connectionService.connect(
+                platformId, {appName: this.appName, userId: this.userId, sessionId: this.sessionId});
+            if (connected === null) {
+              this.openSnackBar('Popup was blocked. Please allow popups and try again.', 'OK');
+              return;
+            }
+            if (!connected) {
+              this.openSnackBar(`${platformName} authorization was not completed.`, 'OK');
+              return;
+            }
+            this.openSnackBar(`${platformName} connected. Continuing your request...`, 'OK');
             this.runSseWithAuthRetry(req, { authRetryCount: authRetryCount + 1 });
             return;
           }
