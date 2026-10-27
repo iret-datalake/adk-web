@@ -52,6 +52,7 @@ import {EditFunctionArgsDialogComponent} from '../eval-tab/edit-function-args-di
 import {EvalCase, EvalTabComponent} from '../eval-tab/eval-tab.component';
 import {EventTabComponent} from '../event-tab/event-tab.component';
 import {DeleteSessionDialogComponent, DeleteSessionDialogData,} from '../session-tab/delete-session-dialog/delete-session-dialog.component';
+import {SettingsDialogComponent, SettingsDialogData} from '../settings-dialog/settings-dialog.component';
 import {SessionTabComponent} from '../session-tab/session-tab.component';
 import {ViewImageDialogComponent} from '../view-image-dialog/view-image-dialog.component';
 import {I18nService} from '../../core/i18n/i18n.service';
@@ -61,6 +62,8 @@ import {getLogoConfig} from '../../core/models/RuntimeConfig';
 import {HitlResolution} from '../hitl-request/hitl-request.component';
 import {InstructionDiffDialogComponent} from '../instruction-diff-dialog/instruction-diff-dialog.component';
 import {DevModeService} from '../../core/services/dev-mode.service';
+import {TokenStreamingService} from '../../core/services/token-streaming.service';
+import {ConnectionService} from '../../core/services/connection.service';
 import {PlatformService} from '../../core/services/platform.service';
 import {MODEL_OPTIONS, PLATFORMS} from '../../core/models/Platform';
 import {ThemeService} from '../../core/services/theme.service';
@@ -99,7 +102,6 @@ const BIDI_STREAMING_RESTART_WARNING =
   'Restarting bidirectional streaming is not currently supported. Please refresh the page or start a new session.';
 
 const THINKING_MODE_STORAGE_KEY = 'adk-web.thinkingMode';
-const TOKEN_STREAMING_STORAGE_KEY = 'adk-web.tokenStreaming';
 
 /** Display names for the root agent's platform tools (sub-agents). */
 const AGENT_TOOL_NAMES: Record<string, string> = {
@@ -239,7 +241,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   redirectUri = URLUtil.getBaseUrlWithoutPath();
   showSidePanel = true;
   /** Token streaming (settings menu): show answers and thoughts while they are generated. */
-  useSse = this.loadTokenStreaming();
   readonly thinkingModeOptions: {value: ThinkingMode, label: MessageKey, tooltip: MessageKey}[] = [
     {value: 'fast', label: 'mode.fast', tooltip: 'mode.fastTooltip'},
     {value: 'standard', label: 'mode.standard', tooltip: 'mode.standardTooltip'},
@@ -313,6 +314,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   protected readonly i18n = inject(I18nService);
   protected readonly themeService = inject(ThemeService);
   protected readonly devMode = inject(DevModeService);
+  private readonly tokenStreaming = inject(TokenStreamingService);
+  private readonly connectionService = inject(ConnectionService);
   protected readonly platformService = inject(PlatformService);
   protected readonly platforms = PLATFORMS;
   protected readonly modelOptions = MODEL_OPTIONS;
@@ -706,6 +709,29 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
               return;
             }
             this.openSnackBar('GitHub connected. Continuing your request...', 'OK');
+            this.runSseWithAuthRetry(req, { authRetryCount: authRetryCount + 1 });
+            return;
+          }
+          if (chunkJson.requiresAuth && chunkJson.authUrl) {
+            // Other OAuth platforms (Slack): the same popup as the settings dialog.
+            const platformId: string = chunkJson.requiresAuth;
+            const platformName = PLATFORMS.find((platform) => platform.id === platformId)?.name ?? platformId;
+            if (authRetryCount >= 1) {
+              this.openSnackBar(`${platformName} authorization did not complete. Please try again.`, 'OK');
+              return;
+            }
+
+            const connected = await this.connectionService.connect(
+                platformId, {appName: this.appName, userId: this.userId, sessionId: this.sessionId});
+            if (connected === null) {
+              this.openSnackBar('Popup was blocked. Please allow popups and try again.', 'OK');
+              return;
+            }
+            if (!connected) {
+              this.openSnackBar(`${platformName} authorization was not completed.`, 'OK');
+              return;
+            }
+            this.openSnackBar(`${platformName} connected. Continuing your request...`, 'OK');
             this.runSseWithAuthRetry(req, { authRetryCount: authRetryCount + 1 });
             return;
           }
@@ -2715,21 +2741,22 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** On unless the user turned it off. */
-  private loadTokenStreaming(): boolean {
-    try {
-      return localStorage.getItem(TOKEN_STREAMING_STORAGE_KEY) !== 'false';
-    } catch {
-      return true;
-    }
+  get useSse(): boolean {
+    return this.tokenStreaming.enabled();
   }
 
-  setTokenStreaming(enabled: boolean) {
-    this.useSse = enabled;
-    try {
-      localStorage.setItem(TOKEN_STREAMING_STORAGE_KEY, String(enabled));
-    } catch {
-      // Storage can be unavailable (private mode); the choice then lasts for this page only.
-    }
+  set useSse(enabled: boolean) {
+    this.tokenStreaming.setEnabled(enabled);
+  }
+
+  openSettings() {
+    this.dialog.open<SettingsDialogComponent, SettingsDialogData>(SettingsDialogComponent, {
+      width: '760px',
+      maxWidth: 'calc(100vw - 32px)',
+      panelClass: 'settings-dialog-panel',
+      autoFocus: false,
+      data: {appName: this.appName, userId: this.userId, sessionId: this.sessionId},
+    });
   }
 
   toggleSse() {
