@@ -271,6 +271,7 @@
 
   textarea {
     color: var(--app-text);
+    caret-color: light-dark(black, white);
     border: none;
     padding: 10px;
     box-sizing: content-box;
