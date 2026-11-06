@@ -37,6 +37,7 @@ export const PLATFORMS: Platform[] = [
   {id: 'asana', name: 'Asana', icon: 'task_alt', defaultEnabled: true},
   {id: 'backlog', name: 'Backlog', icon: 'bug_report', defaultEnabled: true},
   {id: 'github', name: 'GitHub', icon: 'code', defaultEnabled: true},
+  {id: 'docbase', name: 'DocBase', icon: 'article', defaultEnabled: true},
   {id: 'glossary', labelKey: 'agent.glossary', icon: 'menu_book', defaultEnabled: false},
   {id: 'web_search', labelKey: 'agent.webSearch', icon: 'travel_explore', defaultEnabled: false},
 ];
