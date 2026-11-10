@@ -18,6 +18,7 @@ import {Component, effect, EventEmitter, inject, Input, OnChanges, Output, Simpl
 import {take} from 'rxjs';
 
 import {I18nService} from '../../core/i18n/i18n.service';
+import {PLATFORMS} from '../../core/models/Platform';
 import {SessionService} from '../../core/services/session.service';
 
 type PlatformStatusCategory = 'completed' | 'overdue' | 'upcoming' | 'active';
@@ -75,6 +76,17 @@ interface SlackMessageCard {
   permalink: string | null;
 }
 
+interface DocBasePostCard {
+  id: string;
+  title: string;
+  url: string | null;
+  authorName: string | null;
+  publishedAt: string | null;
+  tagNames: string[];
+  groupNames: string[];
+  body: string | null;
+}
+
 @Component({
   selector: 'app-state-tab',
   templateUrl: './state-tab.component.html',
@@ -96,6 +108,8 @@ export class StateTabComponent implements OnChanges {
   protected driveFiles: GoogleDriveFileCard[] = [];
   protected backlogIssues: BacklogIssueCard[] = [];
   protected slackMessages: SlackMessageCard[] = [];
+  protected docbasePosts: DocBasePostCard[] = [];
+  protected docbaseBodyExpansion: Record<string, boolean> = {};
   protected slackMessageExpansion: Record<string, boolean> = {};
   protected asanaDescriptionExpansion: Record<string, boolean> = {};
   protected backlogDescriptionExpansion: Record<string, boolean> = {};
@@ -107,13 +121,14 @@ export class StateTabComponent implements OnChanges {
   private driveState: any = {};
   private backlogState: any = {};
   private slackState: any = {};
+  private docbaseState: any = {};
   private fallbackIdCounter = 0;
   // Only render genuine search-result platforms. Anything else in session
   // state (OAuth tokens such as `asana_oauth`/`github_oauth`, the
   // `session_brief*` keys, sub-agent outputs like `glossary_output`, etc.) is
   // internal plumbing and must not surface as a "platform" panel.
   private readonly displayablePlatforms: ReadonlySet<string> =
-      new Set(['asana', 'gdrive', 'backlog', 'slack', 'gmail']);
+      new Set(['asana', 'gdrive', 'backlog', 'slack', 'gmail', 'docbase']);
 
   private readonly i18n = inject(I18nService);
 
@@ -146,6 +161,23 @@ export class StateTabComponent implements OnChanges {
 
   protected hasSlackMessages(): boolean {
     return this.slackMessages.length > 0;
+  }
+
+  protected hasDocBasePosts(): boolean {
+    return this.docbasePosts.length > 0;
+  }
+
+  protected isDocBaseBodyExpanded(id: string): boolean {
+    return Boolean(this.docbaseBodyExpansion[id]);
+  }
+
+  protected toggleDocBaseBody(id: string): void {
+    this.docbaseBodyExpansion[id] = !this.docbaseBodyExpansion[id];
+  }
+
+  protected shouldShowDocBaseBody(post: DocBasePostCard): boolean {
+    const text = post.body ?? '';
+    return text.length > 220 || text.includes('\n') || text.includes('\r');
   }
 
   protected isSlackMessageExpanded(id: string): boolean {
@@ -361,6 +393,8 @@ export class StateTabComponent implements OnChanges {
           {path: ['slack', 'messages'], removeIds: ids},
           {path: ['slack'], removeIds: ids},
         ];
+      case 'docbase':
+        return [{path: ['docbase', 'posts'], removeIds: ids}];
       default:
         return [];
     }
@@ -383,6 +417,10 @@ export class StateTabComponent implements OnChanges {
     if (platform === 'slack') {
       this.slackMessages = this.slackMessages.filter((message) => !idSet.has(message.id));
       this.slackMessageExpansion = {};
+    }
+    if (platform === 'docbase') {
+      this.docbasePosts = this.docbasePosts.filter((post) => !idSet.has(post.id));
+      this.docbaseBodyExpansion = {};
     }
 
     const updatedPlatformState = this.pruneRawPlatformState(platform, idSet);
@@ -470,6 +508,8 @@ export class StateTabComponent implements OnChanges {
         return this.backlogIssues.map((issue) => issue.issueKey).filter(Boolean);
       case 'slack':
         return this.slackMessages.map((message) => message.id).filter(Boolean);
+      case 'docbase':
+        return this.docbasePosts.map((post) => post.id).filter(Boolean);
       default:
         return [];
     }
@@ -516,6 +556,16 @@ export class StateTabComponent implements OnChanges {
       this.slackState = this.platformStates[platform] ?? {};
       this.prepareSlackViewModel();
     }
+    if (platform === 'docbase') {
+      this.docbaseState = this.platformStates[platform] ?? {};
+      this.prepareDocBaseViewModel();
+    }
+  }
+
+  /** The brand name from the + menu (e.g. DocBase, Google Drive), else the key title-cased. */
+  protected platformLabel(platform: string): string {
+    const name = PLATFORMS.find((item) => item.id === platform)?.name;
+    return name ?? platform.charAt(0).toUpperCase() + platform.slice(1);
   }
 
   protected getPlatformPanelClass(platform: string): string {
@@ -529,6 +579,7 @@ export class StateTabComponent implements OnChanges {
       'gdrive': 'light-dark(#e1f4e5, #1f3326)',
       'gmail': 'light-dark(#fde1e1, #3b2224)',
       'slack': 'light-dark(#f1e5ff, #2f2640)',
+      'docbase': 'light-dark(#ddf3f6, #1f3135)',
     };
     return palette[platform] ?? 'light-dark(#f7f9fa, #1e1f20)';
   }
@@ -592,6 +643,41 @@ export class StateTabComponent implements OnChanges {
     this.slackMessageExpansion = {};
   }
 
+  private prepareDocBaseViewModel(): void {
+    if (!this.hasRawState(this.docbaseState)) {
+      this.docbasePosts = [];
+      this.docbaseBodyExpansion = {};
+      return;
+    }
+
+    // The posts are keyed by their numeric id, which object key order sorts,
+    // so put the newest first like Slack.
+    this.docbasePosts = this.toArray(this.docbaseState?.posts)
+        .map((post) => this.mapDocBasePost(post))
+        .filter((post): post is DocBasePostCard => post !== null)
+        .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''));
+    this.docbaseBodyExpansion = {};
+  }
+
+  private mapDocBasePost(rawPost: any): DocBasePostCard | null {
+    if (!rawPost || typeof rawPost !== 'object' || rawPost.id === undefined || rawPost.id === null) {
+      return null;
+    }
+    const names = (items: any): string[] => this.toArray(items)
+        .map((item) => (typeof item === 'string' ? item : item?.name))
+        .filter((name): name is string => typeof name === 'string' && name.length > 0);
+    return {
+      id: String(rawPost.id),
+      title: typeof rawPost.title === 'string' && rawPost.title ? rawPost.title : this.i18n.t('state.untitledPost'),
+      url: typeof rawPost.url === 'string' ? rawPost.url : null,
+      authorName: typeof rawPost.user?.name === 'string' ? rawPost.user.name : null,
+      publishedAt: rawPost.published_at ?? rawPost.created_at ?? null,
+      tagNames: names(rawPost.tags),
+      groupNames: names(rawPost.groups),
+      body: typeof rawPost.body === 'string' && rawPost.body.trim() ? rawPost.body.trim() : null,
+    };
+  }
+
   private resetPlatformState(): void {
     const state = this.sessionState ?? {};
     this.availablePlatforms = Object.keys(state || {})
@@ -614,6 +700,9 @@ export class StateTabComponent implements OnChanges {
       this.slackState = {};
       this.slackMessages = [];
       this.slackMessageExpansion = {};
+      this.docbaseState = {};
+      this.docbasePosts = [];
+      this.docbaseBodyExpansion = {};
       this.asanaDescriptionExpansion = {};
       this.backlogDescriptionExpansion = {};
       return;
@@ -656,6 +745,15 @@ export class StateTabComponent implements OnChanges {
       this.slackState = {};
       this.slackMessages = [];
       this.slackMessageExpansion = {};
+    }
+
+    if (this.expandedPlatform === 'docbase') {
+      this.docbaseState = this.platformStates['docbase'] ?? {};
+      this.prepareDocBaseViewModel();
+    } else {
+      this.docbaseState = {};
+      this.docbasePosts = [];
+      this.docbaseBodyExpansion = {};
     }
   }
 
