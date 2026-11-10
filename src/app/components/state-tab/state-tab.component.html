@@ -364,6 +364,88 @@
                                     <p>{{ 'state.noSlack' | t }}</p>
                                 </div>
                             }
+                        } @else if (platform === 'docbase') {
+                            @if (hasDocBasePosts()) {
+                                <div class="asana-task-list">
+                                    @for (post of docbasePosts; track post.id) {
+                                        <article class="asana-task-card docbase-post-card" [ngClass]="[isEditing('docbase') ? 'editing' : '', isCardSelected('docbase', post.id) ? 'selected' : '']">
+                                            <div class="card-edit-controls" *ngIf="isEditing('docbase')">
+                                                <label class="card-checkbox">
+                                                    <input type="checkbox" [checked]="isCardSelected('docbase', post.id)" [disabled]="isPruningPlatform['docbase']" (change)="toggleCardSelection('docbase', post.id, $any($event.target).checked)">
+                                                    <span></span>
+                                                </label>
+                                                <button type="button" class="card-close" aria-label="Remove memo" [disabled]="isPruningPlatform['docbase']" (click)="deleteCard('docbase', post.id, $event)">×</button>
+                                            </div>
+                                            <header class="task-card-header">
+                                                <div class="task-header-text">
+                                                    <div class="task-title">{{ post.title }}</div>
+                                                    <div class="task-id">#{{ post.id }}</div>
+                                                </div>
+                                            </header>
+
+                                            <div class="task-card-body">
+                                                <div class="task-meta-row" *ngIf="post.authorName || post.publishedAt">
+                                                    <div class="task-meta" *ngIf="post.authorName">
+                                                        <span class="meta-label">{{ 'state.author' | t }}</span>
+                                                        <span class="meta-value">{{ post.authorName }}</span>
+                                                    </div>
+                                                    <div class="task-meta" *ngIf="post.publishedAt">
+                                                        <span class="meta-label">{{ 'state.published' | t }}</span>
+                                                        <span class="meta-value">{{ post.publishedAt | date:'MMM d, y' }}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-meta-row" *ngIf="post.groupNames.length">
+                                                    <div class="task-meta">
+                                                        <span class="meta-label">{{ 'state.groups' | t }}</span>
+                                                        <div class="meta-pills">
+                                                            @for (group of post.groupNames; track group) {
+                                                                <span class="meta-chip">{{ group }}</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-meta-row" *ngIf="post.tagNames.length">
+                                                    <div class="task-meta">
+                                                        <span class="meta-label">{{ 'state.tags' | t }}</span>
+                                                        <div class="meta-pills">
+                                                            @for (tag of post.tagNames; track tag) {
+                                                                <span class="meta-chip ghost">{{ tag }}</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="task-description-block" *ngIf="post.body">
+                                                    <div class="task-description" [ngClass]="{'collapsed': !isDocBaseBodyExpanded(post.id)}">
+                                                        {{ post.body }}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <footer class="task-card-footer">
+                                                <button
+                                                    type="button"
+                                                    class="expand-toggle"
+                                                    *ngIf="shouldShowDocBaseBody(post)"
+                                                    [attr.aria-expanded]="isDocBaseBodyExpanded(post.id)"
+                                                    (click)="toggleDocBaseBody(post.id)">
+                                                    {{ isDocBaseBodyExpanded(post.id) ? ('state.showLess' | t) : ('state.showMore' | t) }}
+                                                </button>
+                                                <a *ngIf="post.url" [href]="post.url" target="_blank" rel="noopener noreferrer">
+                                                    {{ 'state.openIn' | t: {platform: 'DocBase'} }}
+                                                    <span class="material-symbols-outlined">open_in_new</span>
+                                                </a>
+                                            </footer>
+                                        </article>
+                                    }
+                                </div>
+                            } @else {
+                                <div class="state-empty">
+                                    <p>{{ 'state.noDocbase' | t }}</p>
+                                </div>
+                            }
                         } @else {
                             <div class="state-placeholder">
                                 <p>{{ platform | titlecase }} data does not have a custom viewer yet.</p>
