@@ -110,6 +110,7 @@ const AGENT_TOOL_NAMES: Record<string, string> = {
   sub_agent_asana: 'Asana',
   sub_agent_backlog: 'Backlog',
   sub_agent_github: 'GitHub',
+  sub_agent_docbase: 'DocBase',
 };
 
 /** Platform tools whose display name depends on the UI language. */
