@@ -39,7 +39,7 @@
                 <mat-expansion-panel [ngClass]="['platform-panel-wrapper', 'platform-panel-wrapper-' + platform]" [expanded]="isPanelExpanded(platform)" (opened)="onPanelOpened(platform)" (closed)="onPanelClosed(platform)" [ngStyle]="{'--platform-body-color': getPlatformBodyColor(platform)}">
                     <mat-expansion-panel-header [ngClass]="getPlatformPanelClass(platform)">
                         <div class="platform-header">
-                            <div class="platform-title">{{ platform | titlecase }}</div>
+                            <div class="platform-title">{{ platformLabel(platform) }}</div>
                                 <ng-container *ngIf="!isPruningPlatform[platform]; else pruningIndicator">
                                     <div class="platform-actions">
                                         <button
@@ -448,7 +448,7 @@
                             }
                         } @else {
                             <div class="state-placeholder">
-                                <p>{{ platform | titlecase }} data does not have a custom viewer yet.</p>
+                                <p>{{ platformLabel(platform) }} data does not have a custom viewer yet.</p>
                             </div>
                         }
                     </div>

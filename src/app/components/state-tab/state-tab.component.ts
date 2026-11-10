@@ -18,6 +18,7 @@ import {Component, effect, EventEmitter, inject, Input, OnChanges, Output, Simpl
 import {take} from 'rxjs';
 
 import {I18nService} from '../../core/i18n/i18n.service';
+import {PLATFORMS} from '../../core/models/Platform';
 import {SessionService} from '../../core/services/session.service';
 
 type PlatformStatusCategory = 'completed' | 'overdue' | 'upcoming' | 'active';
@@ -559,6 +560,12 @@ export class StateTabComponent implements OnChanges {
       this.docbaseState = this.platformStates[platform] ?? {};
       this.prepareDocBaseViewModel();
     }
+  }
+
+  /** The brand name from the + menu (e.g. DocBase, Google Drive), else the key title-cased. */
+  protected platformLabel(platform: string): string {
+    const name = PLATFORMS.find((item) => item.id === platform)?.name;
+    return name ?? platform.charAt(0).toUpperCase() + platform.slice(1);
   }
 
   protected getPlatformPanelClass(platform: string): string {
