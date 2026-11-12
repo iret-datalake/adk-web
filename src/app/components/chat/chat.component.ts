@@ -201,7 +201,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('videoContainer', { read: ElementRef }) videoContainer!: ElementRef;
   @ViewChild('sideDrawer') sideDrawer!: MatDrawer;
   @ViewChild(EventTabComponent) eventTabComponent!: EventTabComponent;
-  @ViewChild(SessionTabComponent) sessionTab!: SessionTabComponent;
+  /** Undefined while the side panel is closed: the session tab is not rendered then. */
+  @ViewChild(SessionTabComponent) sessionTab?: SessionTabComponent;
   @ViewChild(EvalTabComponent) evalTab!: EvalTabComponent;
   @ViewChild('autoScroll') private scrollContainer!: ElementRef;
   @ViewChild('messageTextarea') private textarea: ElementRef | undefined;
@@ -603,7 +604,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         this.currentSessionState = res.state;
         this.sessionEvents = [];
         this.sessionId = res.id;
-        this.sessionTab.refreshSession();
+        this.sessionTab?.refreshSession();
 
         this.isSessionUrlEnabledObs.subscribe((enabled) => {
           if (enabled) {
@@ -1239,7 +1240,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       .subscribe({
         next: (response) => {
           if (response?.brief) {
-            this.sessionTab.updateSessionBriefInList(this.sessionId, response.brief);
+            this.sessionTab?.updateSessionBriefInList(this.sessionId, response.brief);
           }
         },
         error: (error) => {
@@ -1894,7 +1895,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   protected handleReturnToSession(event: boolean) {
-    this.sessionTab.getSession(this.sessionId);
+    this.sessionTab?.getSession(this.sessionId);
   this.evalTab?.resetEvalCase();
     this.isChatMode.set(true);
   }
@@ -2823,9 +2824,15 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       if (result) {
         this.sessionService.deleteSession(this.userId, this.appName, session)
           .subscribe((res) => {
-            const nextSession = this.sessionTab.refreshSession(session);
+            const sessionTab = this.sessionTab;
+            if (!sessionTab) {
+              // Side panel closed: no session list to pick the next one from.
+              this.onNewSessionClick();
+              return;
+            }
+            const nextSession = sessionTab.refreshSession(session);
             if (nextSession) {
-              this.sessionTab.getSession(nextSession.id);
+              sessionTab.getSession(nextSession.id);
             } else {
               window.location.reload();
             }
@@ -2840,9 +2847,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!sessionIds.includes(this.sessionId)) {
       return;
     }
-    const nextSession = this.sessionTab.sessionList[0];
+    const nextSession = this.sessionTab?.sessionList[0];
     if (nextSession) {
-      this.sessionTab.getSession(nextSession.id);
+      this.sessionTab?.getSession(nextSession.id);
     } else {
       window.location.reload();
     }
@@ -3046,7 +3053,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
                     sessionData.userId, sessionData.appName, sessionData.events)
                 .subscribe((res) => {
                   this.openSnackBar('Session imported', 'OK');
-                  this.sessionTab.refreshSession();
+                  this.sessionTab?.refreshSession();
                 });
           } catch (error) {
             this.openSnackBar('Error parsing session file', 'OK');
