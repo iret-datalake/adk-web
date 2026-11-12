@@ -18,6 +18,7 @@
 import {HttpClient} from '@angular/common/http';
 import {Injectable, NgZone} from '@angular/core';
 import {BehaviorSubject, Observable, of} from 'rxjs';
+import {SseDataParser} from '../../../utils/sse-parser';
 import {URLUtil} from '../../../utils/url-util';
 import {AgentRunRequest} from '../models/AgentRunRequest';
 
@@ -77,7 +78,11 @@ export class AgentService {
         .then((response) => {
           reader = response.body?.getReader();
           const decoder = new TextDecoder('utf-8');
-          let lastData = '';
+          // Emits each event once even when a chunk ends inside an event.
+          const parser = new SseDataParser();
+          const emit = (events: string[]) => {
+            events.forEach((data) => self.zone.run(() => observer.next(data)));
+          };
 
           const read = () => {
             reader?.read()
@@ -86,30 +91,15 @@ export class AgentService {
                     this.isLoading.next(true);
                   }
                   if (done) {
+                    emit(parser.push(decoder.decode()));
+                    emit(parser.flush());
                     finished = true;
                     if (!suppressLoading) {
                       this.isLoading.next(false);
                     }
                     return observer.complete();
                   }
-                  const chunk = decoder.decode(value, {stream: true});
-                  lastData += chunk;
-                  try {
-                    const lines = lastData.split(/\r?\n/).filter(
-                        (line) => line.startsWith('data:'));
-                    lines.forEach((line) => {
-                      const data = line.replace(/^data:\s*/, '');
-                      JSON.parse(data);
-                      self.zone.run(() => observer.next(data));
-                    });
-                    lastData = '';
-                  } catch (e) {
-                    // the data is not a valid json, it could be an incomplete
-                    // chunk. we ignore it and wait for the next chunk.
-                    if (e instanceof SyntaxError) {
-                      read();
-                    }
-                  }
+                  emit(parser.push(decoder.decode(value, {stream: true})));
                   read();  // Read the next chunk
                 })
                 .catch((err) => {
