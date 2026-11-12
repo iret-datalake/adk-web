@@ -1252,6 +1252,13 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     if (isEmptyTextPart(part)) {
       return;
     }
+    if (chunkJson.partial && !part.text) {
+      // With token streaming, ADK's progressive SSE also sends function calls
+      // and other non-text parts in partial events, and the final event
+      // repeats them. Show them from the final event only, or each one (an
+      // input dialog, an activity step) would appear twice.
+      return;
+    }
     if (part.text && this.isDelegatedSubAgentEvent(chunkJson)) {
       if (chunkJson.partial) {
         // A sub-agent's text is stored once, from its final event.
