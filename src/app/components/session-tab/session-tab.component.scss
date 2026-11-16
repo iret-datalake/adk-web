@@ -73,6 +73,42 @@
   flex: none;
 }
 
+// Claude Code style status lamp: running (spinning ring), finished but not
+// viewed yet (red), viewed (grey).
+.status-lamp {
+  flex: none;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  margin-left: 12px;
+  border-radius: 50%;
+  background-color: light-dark(#9aa0a6, #6f7378);
+
+  &.unseen {
+    background-color: light-dark(#d93025, #f28b82);
+  }
+
+  &.running {
+    background-color: transparent;
+    border: 2px solid light-dark(#c7cbd1, #4a4d50);
+    border-top-color: var(--app-accent);
+    animation: status-lamp-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes status-lamp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-lamp.running {
+    animation: none;
+    border-color: var(--app-accent);
+  }
+}
+
 .session-info {
   flex: 1;
   min-width: 0;

@@ -154,6 +154,16 @@
         (change)="toggleSelected(session.id)"
       ></mat-checkbox>
     }
+    @if (lampStatus(session); as status) {
+      <span
+        class="status-lamp"
+        [class.running]="status === 'running'"
+        [class.unseen]="status === 'unseen'"
+        role="img"
+        [attr.aria-label]="lampLabel(status)"
+        [matTooltip]="lampLabel(status)"
+      ></span>
+    }
     <div class="session-info">
       @if (renamingSessionId === session.id) {
         <input

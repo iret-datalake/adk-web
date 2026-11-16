@@ -26,7 +26,7 @@ import {MatSnackBar} from '@angular/material/snack-bar';
 import {DomSanitizer, SafeHtml} from '@angular/platform-browser';
 import {ActivatedRoute, NavigationEnd, Router} from '@angular/router';
 import {instance} from '@viz-js/viz';
-import {BehaviorSubject, catchError, combineLatest, distinctUntilChanged, finalize, filter, map, Observable, of, shareReplay, Subscription, switchMap, take, tap} from 'rxjs';
+import {BehaviorSubject, catchError, combineLatest, distinctUntilChanged, finalize, filter, map, Observable, of, shareReplay, switchMap, take, tap} from 'rxjs';
 import stc from 'string-to-color';
 
 import {URLUtil} from '../../../utils/url-util';
@@ -65,6 +65,7 @@ import {DevModeService} from '../../core/services/dev-mode.service';
 import {TokenStreamingService} from '../../core/services/token-streaming.service';
 import {ConnectionService} from '../../core/services/connection.service';
 import {PlatformService} from '../../core/services/platform.service';
+import {SessionRun, SessionRunService} from '../../core/services/session-run.service';
 import {MODEL_OPTIONS, PLATFORMS} from '../../core/models/Platform';
 import {ThemeService} from '../../core/services/theme.service';
 
@@ -249,8 +250,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     {value: 'thinking', label: 'mode.thinking', tooltip: 'mode.thinkingTooltip'},
   ];
   thinkingMode: ThinkingMode = this.loadThinkingMode();
-  /** True while an agent response is streaming; swaps the send button for a stop button. */
-  isAgentResponding = signal(false);
+  /** True while the open session's agent response is streaming; swaps the send button for a stop button. */
+  isAgentResponding(): boolean {
+    return this.sessionRuns.isRunning(this.sessionId);
+  }
   readonly feedbackDirections: FeedbackDirection[] = ['up', 'down'];
   /** The answer whose optional feedback comment box is open. */
   feedbackCommentEventId: string | null = null;
@@ -266,7 +269,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Graphviz (viz.js) for the flow diagram in the activity panel, loaded on first use. */
   private viz?: Awaited<ReturnType<typeof instance>>;
   private readonly activityFlowCache = new Map<string, {svg: string, html: SafeHtml}>();
-  private activeSseSubscription?: Subscription;
   currentSessionState = {};
   /** Every event of the session as stored (also state-only ones), for the developer tabs. */
   sessionEvents: any[] = [];
@@ -326,6 +328,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Load apps
   private readonly agentService = inject(AgentService);
+  private readonly sessionRuns = inject(SessionRunService);
   protected isLoadingApps: WritableSignal<boolean> = signal(false);
   protected loadingError: WritableSignal<string> = signal('');
   protected readonly apps$: Observable<string[] | undefined> = of([]).pipe(
@@ -445,23 +448,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       this.appName = app;
     });
 
-    combineLatest([
-      this.agentService.getLoadingState(), this.isModelThinkingSubject
-    ]).subscribe(([isLoading, isModelThinking]) => {
-      this.isAgentResponding.set(isLoading);
-      const lastMessage = this.messages[this.messages.length - 1];
-
-      if (isLoading) {
-        if (!lastMessage?.isLoading && !this.streamingTextMessage) {
-          this.messages.push({ role: 'bot', isLoading: true });
-          this.messagesSubject.next(this.messages);
-        }
-      } else if (lastMessage?.isLoading && !isModelThinking) {
-        this.messages.pop();
-        this.messagesSubject.next(this.messages);
-        this.changeDetectorRef.detectChanges();
-      }
-    });
+    this.isModelThinkingSubject.subscribe(() => this.refreshLoadingMessage());
 
     combineLatest([
       this.messagesSubject, this.scrollInterruptedSubject,
@@ -604,6 +591,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         this.currentSessionState = res.state;
         this.sessionEvents = [];
         this.sessionId = res.id;
+        // A run of the previous session may have streamed into the view
+        // while the new session was being created.
+        this.resetStreamingView();
+        this.resetEventsAndMessages();
         this.sessionTab?.refreshSession();
 
         this.isSessionUrlEnabledObs.subscribe((enabled) => {
@@ -637,9 +628,9 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Add user message
+    const userMessages: any[] = [];
     if (!!this.userInput.trim()) {
-      this.messages.push({role: 'user', text: this.userInput});
-      this.messagesSubject.next(this.messages);
+      userMessages.push({role: 'user', text: this.userInput});
     }
 
     // Add user message attachments
@@ -648,7 +639,10 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
         file: file.file,
         url: file.url,
       }));
-      this.messages.push({ role: 'user', attachments: messageAttachments });
+      userMessages.push({ role: 'user', attachments: messageAttachments });
+    }
+    if (userMessages.length > 0) {
+      this.messages.push(...userMessages);
       this.messagesSubject.next(this.messages);
     }
 
@@ -665,22 +659,32 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       enabledPlatforms: this.platformService.enabledIds(),
     };
     this.selectedFiles = [];
-    this.runSseWithAuthRetry(req);
+    this.runSseWithAuthRetry(req, {userMessages});
     // Clear input
     this.userInput = '';
     this.changeDetectorRef.detectChanges();
   }
 
+  /**
+   * Streams one agent run of `req.sessionId`. The run goes on while the user
+   * opens another session: its events are kept in the SessionRun and shown
+   * again when the user comes back.
+   */
   private runSseWithAuthRetry(
     req: AgentRunRequest,
-    options?: { authRetryCount?: number },
+    options?: { authRetryCount?: number, userMessages?: any[] },
   ) {
-    let index = this.eventMessageIndexArray.length - 1;
-    this.streamingTextMessage = null;
-    this.streamingThoughtMessage = null;
+    const sessionId = req.sessionId;
+    const run = this.sessionRuns.start(sessionId, options?.userMessages);
+    if (this.isOpenSession(sessionId)) {
+      run.index = this.eventMessageIndexArray.length - 1;
+      this.streamingTextMessage = null;
+      this.streamingThoughtMessage = null;
+      this.refreshLoadingMessage();
+    }
     let sessionBriefRefreshQueued = false;
     const authRetryCount = options?.authRetryCount ?? 0;
-    const subscription: Subscription = this.agentService.runSse(req).subscribe({
+    run.subscription = this.agentService.runSse(req, {suppressLoading: true}).subscribe({
       next: async (chunk) => {
         const chunkJson = JSON.parse(chunk);
         if (chunkJson.error) {
@@ -724,7 +728,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
             }
 
             const connected = await this.connectionService.connect(
-                platformId, {appName: this.appName, userId: this.userId, sessionId: this.sessionId});
+                platformId, {appName: req.appName, userId: req.userId, sessionId});
             if (connected === null) {
               this.openSnackBar('Popup was blocked. Please allow popups and try again.', 'OK');
               return;
@@ -744,31 +748,99 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
           sessionBriefRefreshQueued = true;
           return;
         }
-        if (chunkJson.content) {
-          for (let part of chunkJson.content.parts) {
-            index += 1;
-            this.processPart(chunkJson, part, index);
-            this.traceService.setEventData(this.eventData);
-          }
+        run.chunks.push(chunkJson);
+        run.invocationId ??= chunkJson.invocationId;
+        if (!this.isOpenSession(sessionId)) {
+          // Shown from run.chunks when the user opens the session again.
+          return;
         }
+        this.showRunChunk(run, chunkJson);
+        this.refreshLoadingMessage();
         this.changeDetectorRef.detectChanges();
       },
       error: (err) => {
-        this.clearActiveSseSubscription(subscription);
         console.error('SSE error:', err);
+        this.finishRun(run, false);
       },
       complete: () => {
-        // An auth retry may already have started the next request; keep that one.
-        this.clearActiveSseSubscription(subscription);
-        this.streamingTextMessage = null;
-        this.streamingThoughtMessage = null;
-        if (sessionBriefRefreshQueued) {
-          this.requestSessionBriefRefresh();
-        }
-        this.syncAfterAgentRun();
+        this.finishRun(run, sessionBriefRefreshQueued);
       },
     });
-    this.activeSseSubscription = subscription;
+  }
+
+  private isOpenSession(sessionId: string): boolean {
+    return this.isChatMode() && this.sessionId === sessionId;
+  }
+
+  /** Shows one SSE event of the open session's run. */
+  private showRunChunk(run: SessionRun, chunkJson: any) {
+    if (!chunkJson.content) {
+      return;
+    }
+    for (const part of chunkJson.content.parts) {
+      run.index += 1;
+      this.processPart(chunkJson, part, run.index);
+      this.traceService.setEventData(this.eventData);
+    }
+  }
+
+  /** The run's stream ended (finished, failed or replaced by an auth retry). */
+  private finishRun(run: SessionRun, sessionBriefRefreshQueued: boolean) {
+    // An auth retry may already have started the next run; keep that one.
+    this.sessionRuns.end(run);
+    if (sessionBriefRefreshQueued) {
+      this.requestSessionBriefRefresh(run.sessionId);
+    }
+    if (this.sessionRuns.isRunning(run.sessionId)) {
+      return;
+    }
+    if (!this.isOpenSession(run.sessionId)) {
+      // The list picks up run_completed_at and shows the session as unseen.
+      this.sessionTab?.refreshSession();
+      return;
+    }
+    this.streamingTextMessage = null;
+    this.streamingThoughtMessage = null;
+    this.refreshLoadingMessage();
+    this.changeDetectorRef.detectChanges();
+    this.syncAfterAgentRun();
+    this.markSessionViewed(run.sessionId);
+  }
+
+  /** The "responding" placeholder message at the end of the open session's chat. */
+  private refreshLoadingMessage() {
+    const lastMessage = this.messages[this.messages.length - 1];
+    if (this.isAgentResponding()) {
+      if (!lastMessage?.isLoading && !this.streamingTextMessage) {
+        this.messages.push({role: 'bot', isLoading: true});
+        this.messagesSubject.next(this.messages);
+      }
+    } else if (lastMessage?.isLoading && !this.isModelThinkingSubject.value) {
+      this.messages.pop();
+      this.messagesSubject.next(this.messages);
+      this.changeDetectorRef.detectChanges();
+    }
+  }
+
+  /** Forgets the streaming state of the chat shown before a session switch. */
+  private resetStreamingView() {
+    this.streamingTextMessage = null;
+    this.streamingThoughtMessage = null;
+    if (this.isModelThinkingSubject.value) {
+      this.isModelThinkingSubject.next(false);
+    }
+  }
+
+  /** The user has seen the session's finished run: its lamp turns grey. */
+  private markSessionViewed(sessionId: string) {
+    if (!sessionId || !this.userId || !this.appName) {
+      return;
+    }
+    this.sessionService.markSessionViewed(this.userId, this.appName, sessionId)
+        .subscribe({
+          next: (res) => this.sessionTab?.applyViewed(sessionId, res?.last_viewed_at ?? null),
+          error: (error) => console.warn('Failed to mark the session viewed', error),
+        });
   }
 
   /** The user's rating of an answer: changed here, or saved in the session state. */
@@ -951,7 +1023,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Stop button: abort the running response; the backend stops the agent run. */
   stopAgentResponse() {
-    if (!this.abortActiveSse()) {
+    if (!this.sessionRuns.abort(this.sessionId)) {
       return;
     }
     this.isModelThinkingSubject.next(false);
@@ -964,21 +1036,6 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private stoppedNoticeMessage() {
     return {role: 'bot', text: '回答を停止しました。', stopped: true};
-  }
-
-  private abortActiveSse(): boolean {
-    if (!this.activeSseSubscription) {
-      return false;
-    }
-    this.activeSseSubscription.unsubscribe();
-    this.activeSseSubscription = undefined;
-    return true;
-  }
-
-  private clearActiveSseSubscription(subscription: Subscription) {
-    if (this.activeSseSubscription === subscription) {
-      this.activeSseSubscription = undefined;
-    }
   }
 
   /** Reload trace, messages for the trace view, and state after a run ends or is stopped. */
@@ -1231,16 +1288,16 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  private requestSessionBriefRefresh() {
-    if (!this.sessionId) {
+  private requestSessionBriefRefresh(sessionId: string) {
+    if (!sessionId) {
       return;
     }
     this.sessionService
-      .getSessionBrief(this.userId, this.appName, this.sessionId)
+      .getSessionBrief(this.userId, this.appName, sessionId)
       .subscribe({
         next: (response) => {
           if (response?.brief) {
-            this.sessionTab?.updateSessionBriefInList(this.sessionId, response.brief);
+            this.sessionTab?.updateSessionBriefInList(sessionId, response.brief);
           }
         },
         error: (error) => {
@@ -1665,7 +1722,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
     if (sessionBriefRefreshQueued) {
-      this.requestSessionBriefRefresh();
+      this.requestSessionBriefRefresh(this.sessionId);
     }
     this.refreshSessionStateFromServer();
   }
@@ -1747,7 +1804,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.abortActiveSse();
+    this.sessionRuns.abortAll();
     this.webSocketService.closeConnection();
   }
 
@@ -1924,6 +1981,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     this.sessionEvents = session.events ?? [];
     this.evalCase = null;
     this.isChatMode.set(true);
+    this.resetStreamingView();
+    const run = this.sessionRuns.get(session.id);
 
     this.isSessionUrlEnabledObs.subscribe((enabled) => {
       if (enabled) {
@@ -1944,7 +2003,8 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     };
 
-    session.events.forEach((event: any) => {
+    const events = run ? this.eventsBeforeRun(session.events, run) : session.events;
+    events.forEach((event: any) => {
       if (abortedInvocationId && event.invocationId !== abortedInvocationId) {
         addStoppedNotice();
       }
@@ -1967,6 +2027,12 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
     addStoppedNotice();
+    if (run) {
+      this.replayRun(run);
+    } else {
+      this.markSessionViewed(session.id);
+    }
+    this.refreshLoadingMessage();
 
     this.eventService.getTrace(this.sessionId).subscribe(res => {
       this.traceData = res;
@@ -1975,6 +2041,37 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     this.bottomPanelVisible = false;
+  }
+
+  /**
+   * The stored events before a run still in progress; the run itself is shown
+   * from what this page received (also the partial, not yet stored, text).
+   */
+  private eventsBeforeRun(events: any[], run: SessionRun): any[] {
+    if (run.invocationId) {
+      return events.filter((event) => event.invocationId !== run.invocationId);
+    }
+    if (run.userMessages.length === 0) {
+      return events;
+    }
+    // No event yet: the user's message may already be stored at the end.
+    let end = events.length;
+    while (end > 0 && events[end - 1].author === 'user') {
+      end -= 1;
+    }
+    return events.slice(0, end);
+  }
+
+  /** Shows a run in progress again, as if it had streamed into this view. */
+  private replayRun(run: SessionRun) {
+    if (run.userMessages.length > 0) {
+      this.messages.push(...run.userMessages);
+      this.messagesSubject.next(this.messages);
+    }
+    run.index = this.eventMessageIndexArray.length - 1;
+    for (const chunkJson of run.chunks) {
+      this.showRunChunk(run, chunkJson);
+    }
   }
 
   protected updateWithSelectedEvalCase(evalCase: EvalCase) {
@@ -2822,6 +2919,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe((result) => {
       if (result) {
+        this.sessionRuns.abort(session);
         this.sessionService.deleteSession(this.userId, this.appName, session)
           .subscribe((res) => {
             const sessionTab = this.sessionTab;
@@ -2844,6 +2942,7 @@ export class ChatComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Leaves the open session if the session list just deleted it. */
   protected onSessionsDeleted(sessionIds: string[]) {
+    sessionIds.forEach((id) => this.sessionRuns.abort(id));
     if (!sessionIds.includes(this.sessionId)) {
       return;
     }

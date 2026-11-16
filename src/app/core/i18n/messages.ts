@@ -243,6 +243,9 @@ const JA = {
   'sessions.renameSession': 'タイトルを変更',
   'sessions.titlePlaceholder': 'タイトル（空欄で自動生成に戻す）',
   'sessions.titleFailed': 'タイトルを変更できませんでした',
+  'sessions.statusRunning': '実行中',
+  'sessions.statusUnseen': '完了（未確認）',
+  'sessions.statusSeen': '確認済み',
 };
 
 export type MessageKey = keyof typeof JA;
@@ -472,6 +475,9 @@ const EN: Record<MessageKey, string> = {
   'sessions.renameSession': 'Rename',
   'sessions.titlePlaceholder': 'Title (leave blank for the generated one)',
   'sessions.titleFailed': 'Could not rename the session',
+  'sessions.statusRunning': 'Running',
+  'sessions.statusUnseen': 'Finished (not viewed yet)',
+  'sessions.statusSeen': 'Viewed',
 };
 
 export const MESSAGES: Record<Language, Record<MessageKey, string>> = {

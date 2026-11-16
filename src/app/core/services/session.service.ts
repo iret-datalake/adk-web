@@ -168,6 +168,13 @@ export class SessionService {
     return this.http.delete<void>(url);
   }
 
+  /** Marks the session's finished run as seen (the status lamp turns grey). */
+  markSessionViewed(userId: string, appName: string, sessionId: string) {
+    const url = this.apiServerDomain +
+        `/apps/${appName}/users/${userId}/sessions/${sessionId}/viewed`;
+    return this.http.post<{last_viewed_at: number | null}>(url, {});
+  }
+
   getSessionBrief(userId: string, appName: string, sessionId: string) {
     const url = this.apiServerDomain +
         `/apps/${appName}/users/${userId}/sessions/${sessionId}/brief`;
