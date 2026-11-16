@@ -21,6 +21,7 @@ import {MatSnackBar} from '@angular/material/snack-bar';
 import {catchError, forkJoin, Observable, of, Subject, switchMap} from 'rxjs';
 import {I18nService} from '../../core/i18n/i18n.service';
 import {Session} from '../../core/models/Session';
+import {SessionRunService} from '../../core/services/session-run.service';
 import {SessionFolder, SessionFolders, SessionService} from '../../core/services/session.service';
 import {DeleteSessionDialogComponent, DeleteSessionDialogData} from './delete-session-dialog/delete-session-dialog.component';
 
@@ -31,6 +32,13 @@ interface SessionGroup {
 }
 
 const NO_FOLDERS: SessionFolders = {folders: [], assignments: {}};
+
+/** Session state keys (epoch seconds) written by the backend for the status lamp. */
+const RUN_COMPLETED_AT_KEY = 'run_completed_at';
+const LAST_VIEWED_AT_KEY = 'last_viewed_at';
+
+/** The session list's status lamp: running, finished but not viewed, or viewed. */
+export type SessionLampStatus = 'running'|'unseen'|'seen';
 
 @Component({
   selector: 'app-session-tab',
@@ -78,6 +86,7 @@ export class SessionTabComponent implements OnInit {
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly i18n = inject(I18nService);
+  private readonly sessionRuns = inject(SessionRunService);
 
   constructor(
     private sessionService: SessionService,
@@ -547,6 +556,40 @@ export class SessionTabComponent implements OnInit {
       }
       return this.sessionList[index + 1];
     }
+  }
+
+  lampStatus(session: any): SessionLampStatus {
+    if (this.sessionRuns.isRunning(session.id)) {
+      return 'running';
+    }
+    // The open session is in view, so its run counts as seen.
+    if (session.id === this.sessionId) {
+      return 'seen';
+    }
+    const completedAt = Number(session.state?.[RUN_COMPLETED_AT_KEY] ?? 0);
+    const viewedAt = Number(session.state?.[LAST_VIEWED_AT_KEY] ?? 0);
+    return completedAt > viewedAt ? 'unseen' : 'seen';
+  }
+
+  protected lampLabel(status: SessionLampStatus): string {
+    switch (status) {
+      case 'running':
+        return this.i18n.t('sessions.statusRunning');
+      case 'unseen':
+        return this.i18n.t('sessions.statusUnseen');
+      default:
+        return this.i18n.t('sessions.statusSeen');
+    }
+  }
+
+  /** The user opened the session: keep the list in step with the saved view time. */
+  applyViewed(sessionId: string, viewedAt: number|null) {
+    if (viewedAt === null) {
+      return;
+    }
+    this.sessionList = this.sessionList.map((session) => session.id !== sessionId ?
+        session :
+        {...session, state: {...(session.state ?? {}), [LAST_VIEWED_AT_KEY]: viewedAt}});
   }
 
   private decorateSession(session: any): any {
